@@ -31,6 +31,7 @@ from pathlib import Path
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from llm import Provider, get_provider  # noqa: E402
 from tools import TOOL_SCHEMA, InvestigationTools, build_dispatch  # noqa: E402
 
 MAX_STEPS = 5
@@ -115,11 +116,13 @@ def _fmt(d: dict) -> str:
 
 
 class ResolutionAgent:
-    def __init__(self, tools: InvestigationTools, max_steps: int = MAX_STEPS):
+    def __init__(self, tools: InvestigationTools, max_steps: int = MAX_STEPS,
+                 provider: Provider | None = None):
         self.tools = tools
         self.dispatch = build_dispatch(tools)
         self.max_steps = max_steps
-        self.available = bool(os.environ.get("ANTHROPIC_API_KEY"))
+        self.provider = provider or get_provider()
+        self.available = self.provider.available
 
     def investigate(self, entity_id: str, entity_type: str,
                     context: str) -> AgentResult:
@@ -127,83 +130,63 @@ class ResolutionAgent:
 
         if not self.available:
             result.terminated = "unavailable"
-            result.analyst_note = ("agent not run: no ANTHROPIC_API_KEY "
-                                   "configured; record remains an exception")
+            result.analyst_note = (
+                f"agent not run: {getattr(self.provider, 'reason', 'no provider')}; "
+                f"record remains an exception")
             return result
 
-        try:
-            import anthropic
-        except ImportError:
-            result.terminated = "unavailable"
-            result.analyst_note = "anthropic SDK not installed"
-            return result
-
-        client = anthropic.Anthropic()
         system = SYSTEM_PROMPT.format(
             max_steps=self.max_steps,
             classifications=", ".join(CLASSIFICATIONS))
         messages: list[dict] = [{"role": "user", "content": context}]
 
         for step_n in range(1, self.max_steps + 1):
-            try:
-                resp = client.messages.create(
-                    model="claude-sonnet-4-6",
-                    max_tokens=1024,
-                    system=system,
-                    tools=TOOL_SCHEMA,
-                    messages=messages,
-                )
-                result.model_calls += 1
-            except Exception as exc:                      # noqa: BLE001
+            resp = self.provider.complete(system, messages,
+                                          tools=TOOL_SCHEMA, max_tokens=1024)
+            result.model_calls += 1
+
+            if not resp.ok:
                 result.terminated = "model_error"
-                result.analyst_note = (f"agent aborted: {str(exc)[:120]}; "
+                result.analyst_note = (f"agent aborted: {resp.error[:120]}; "
                                        f"record remains an exception")
                 return result
 
-            tool_uses = [b for b in resp.content
-                         if getattr(b, "type", "") == "tool_use"]
-
-            if not tool_uses:
-                text = "".join(b.text for b in resp.content
-                               if getattr(b, "type", "") == "text")
-                self._parse_verdict(text, result)
+            if not resp.wants_tools:
+                self._parse_verdict(resp.text, result)
                 result.terminated = "answered"
                 return result
 
-            messages.append({"role": "assistant", "content": resp.content})
+            messages.append(self.provider.assistant_turn(resp))
             tool_results = []
 
-            for use in tool_uses:
+            for use in resp.tool_calls:
                 fn = self.dispatch.get(use.name)
                 if fn is None:
                     # Refuse anything outside the registry. The agent cannot
                     # widen its own capabilities.
                     payload = {"ok": False,
                                "summary": f"tool '{use.name}' is not available"}
-                    result.steps.append(Step(step_n, use.name, dict(use.input),
-                                             False, payload["summary"]))
+                    result.steps.append(Step(step_n, use.name,
+                                             dict(use.arguments), False,
+                                             payload["summary"]))
                 else:
                     try:
-                        tr = fn(**use.input)
+                        tr = fn(**use.arguments)
                         payload = {"ok": tr.ok, "summary": tr.summary,
                                    "evidence": tr.evidence}
                         result.steps.append(Step(step_n, use.name,
-                                                 dict(use.input), tr.ok,
+                                                 dict(use.arguments), tr.ok,
                                                  tr.summary))
                     except TypeError as exc:
                         payload = {"ok": False,
                                    "summary": f"invalid arguments: {exc}"}
                         result.steps.append(Step(step_n, use.name,
-                                                 dict(use.input), False,
+                                                 dict(use.arguments), False,
                                                  payload["summary"]))
 
-                tool_results.append({
-                    "type": "tool_result",
-                    "tool_use_id": use.id,
-                    "content": json.dumps(payload, default=str),
-                })
+                tool_results.append((use.id, payload))
 
-            messages.append({"role": "user", "content": tool_results})
+            messages.append(self.provider.tool_results_turn(tool_results))
 
         # Step limit reached without a verdict. Escalate rather than guess.
         result.terminated = "step_limit"

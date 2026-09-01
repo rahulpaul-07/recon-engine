@@ -31,6 +31,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from core import paise_to_rupees_str, working_day_window  # noqa: E402
+from llm import get_provider  # noqa: E402
 
 
 # --------------------------------------------------------------------------
@@ -100,35 +101,32 @@ Narration: {description}"""
 
 
 class LLMProposer:
-    def __init__(self) -> None:
-        self.available = bool(os.environ.get("ANTHROPIC_API_KEY"))
+    def __init__(self, provider=None) -> None:
+        self.provider = provider or get_provider()
+        self.available = self.provider.available
         self.calls = 0
-        self.reason_unavailable = "" if self.available else "no API key configured"
+        self.reason_unavailable = ("" if self.available
+                                   else getattr(self.provider, "reason",
+                                                "no provider configured"))
 
     def propose(self, description: str) -> Proposal:
         if not self.available:
             return Proposal(None, "llm_unavailable", "none")
 
         self.calls += 1
-        try:
-            import anthropic
-            client = anthropic.Anthropic()
-            resp = client.messages.create(
-                model="claude-sonnet-4-6",
-                max_tokens=64,
-                messages=[{
-                    "role": "user",
-                    "content": EXTRACTION_PROMPT.format(description=description),
-                }],
-            )
-            text = "".join(
-                b.text for b in resp.content if getattr(b, "type", "") == "text"
-            ).strip()
-        except Exception as exc:                      # noqa: BLE001
+        resp = self.provider.complete(
+            system="You extract identifiers from bank statement narration.",
+            messages=[{"role": "user",
+                       "content": EXTRACTION_PROMPT.format(
+                           description=description)}],
+            max_tokens=64)
+
+        if not resp.ok:
             # A model failure must never fail the reconciliation run. The row
             # falls through to the exception list, which is the correct
             # outcome for something the system could not resolve.
-            return Proposal(None, "llm_error", "none", raw_span=str(exc)[:80])
+            return Proposal(None, "llm_error", "none", raw_span=resp.error[:80])
+        text = resp.text.strip()
 
         if not text or text.upper() == "NONE":
             return Proposal(None, "llm", "none")
