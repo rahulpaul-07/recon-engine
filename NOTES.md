@@ -109,3 +109,64 @@ It is the thing that makes any proposal safe to act on.
 
 Kept `--no-verify` in the code as a deliberate ablation path so this can be
 demonstrated rather than asserted.
+
+---
+
+### 2026-09-01 — Grading exposed an entity-identity mismatch, then a real bug.
+
+Built the evaluation harness to grade engine output against the answer key.
+First run: `net_arithmetic_error` scored recall 0.00 despite the engine
+correctly finding both planted rows.
+
+Not a matcher bug. Tier 0 reports the broken identity against the
+**transaction**; the answer key recorded it against the **order**. Same
+finding, two different primary keys, so the grader never lined them up. The
+arithmetic error is a property of the gateway row, so the key was wrong.
+Fixed in the generator.
+
+That took the run to 128/128. Which is where the harness stopped being a
+formality.
+
+---
+
+### 2026-09-01 — A perfect score on one seed hid a real defect.
+
+Ran the same evaluation across twelve independently generated batches:
+resolution 92.7% +/- 0.4%, accuracy 99.9% +/- 0.2%. Ten seeds scored 100%.
+Seeds 5 and 9 did not.
+
+Both failures are the same bug. When a statement line is missing, the
+discontinuity is only visible at the row *after* it, so Tier 0 flags that
+following row as `missing_bank_row`. But that row is not the problem -- the
+gap describes its predecessor. On seeds 5 and 9 the dropped line happened to
+land immediately before a messy-narration row and an orphan credit, and the
+gap detector claimed them, overwriting their true classification.
+
+A precedence conflict between two detectors with a legitimate claim on the
+same row. The fix is for the balance-gap check to emit against the gap itself
+rather than against the row that reveals it.
+
+Recorded as a known issue rather than patched in the same sitting, because the
+fix touches how the answer key identifies a dropped row and I would rather
+change that deliberately than at the end of a session.
+
+The wider point: on seed 42 this bug is invisible. A single run would have
+reported 100% and I would have believed it. Variance testing is not a
+statistical nicety here -- it is the only reason I know this exists.
+
+---
+
+### 2026-09-01 — Fixed the balance-gap precedence bug.
+
+The gap detector was stamping `missing_bank_row` onto whichever row revealed
+the discontinuity, overwriting that row's own classification. The gap does not
+belong to that row -- it describes the space before it.
+
+Changed both sides to key it as its own entity, `GAP_BEFORE_<row_id>`. The
+generator records the answer key the same way, because the dropped line never
+appears in the statement and therefore has no id the engine could reference.
+
+Accuracy across twelve seeds went from 99.9% +/- 0.2% to 100.0% +/- 0.0%, and
+the two misclassifications are gone. Resolution rate did not move, which is
+what I expected: the bug changed how rows were labelled, not how many were
+resolved.
