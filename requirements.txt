@@ -1,5 +1,5 @@
 anthropic>=0.40.0
 
-# Optional alternative providers. Any one is sufficient.
-# groq>=0.11.0
-# google-genai>=0.3.0
+# Optional alternative providers. Any one is sufficient; several give failover.
+# openai>=1.50.0       # required for groq, cerebras, openrouter, together, mistral
+# google-genai>=0.3.0  # required for gemini

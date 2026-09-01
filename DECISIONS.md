@@ -156,3 +156,32 @@ whole project hostage to one signup, one rate limit and one outage.
 adapter flattens the exchange into a single prompt rather than translating it
 fully. Adequate for the short bounded loops here, and stated in the module
 rather than hidden.
+
+---
+
+## D10 - Provider failover is per call, and a failed provider is demoted
+
+**Chosen:** a `FallbackChain` over every configured provider. On error the next
+one is tried within the same call, and the failing provider is demoted for the
+rest of the session.
+
+**Why the original design was not enough:** selecting a provider once at startup
+survives a missing key and nothing else. The first live run of this project
+failed on a key that was valid but attached to an account with no credit -- a
+condition indistinguishable from a working setup until the call is made. A rate
+limit hit on the fourth step of a five-step investigation would fail the same
+way.
+
+**Why demote rather than retry:** thirteen exceptions retrying two dead
+providers is twenty-six doomed calls before any work happens, and the genuine
+error ends up buried under repeats. One attempt per provider per session is
+enough to establish it is unusable.
+
+**Why failovers are reported:** silently answering from a different vendor than
+the operator expected is its own failure. Every demotion is recorded and printed
+with the run.
+
+Seven providers are supported. Five of them speak the OpenAI chat dialect and
+are expressed as configuration of one adapter rather than five classes, so the
+awkward part -- translating Anthropic's tool-result blocks into OpenAI's
+separate `tool` messages -- is written and debugged once.
