@@ -124,3 +124,35 @@ use of an LLM than asking one to perform the matching itself.
 `balance_paise` lets the engine detect rows *missing from the statement
 entirely*: if `balance[n] - balance[n-1] != credit[n] - debit[n]`, a line is
 absent. The generator drops one row deliberately to exercise this.
+
+---
+
+## D9 - The language model provider is swappable, and "none" is a valid choice
+
+**Chosen:** one interface (`src/llm.py`) over Anthropic, Groq and Gemini, plus
+an explicit null provider. Selection is by environment variable, with an
+override for forcing a specific vendor.
+
+**Why:** a reconciliation run must not fail because one vendor is unreachable.
+For a payments company a provider outage is an ordinary Tuesday, not an
+exceptional condition, so degradation has to be a designed path rather than an
+error branch.
+
+Tool schemas are written once in Anthropic's format and translated at the
+provider boundary. Keeping one source of truth matters more than avoiding the
+translation: duplicating the schema per vendor would let the definitions drift
+apart silently, which is precisely the class of bug this project exists to
+detect elsewhere.
+
+**`none` is a first-class provider.** With no key configured the system runs
+its deterministic paths and states plainly that model-dependent steps were not
+attempted. A demo that silently changes behaviour when a key is absent is worse
+than one that says so.
+
+**Rejected:** calling a single vendor's SDK directly. Simpler, and it makes the
+whole project hostage to one signup, one rate limit and one outage.
+
+**Known limitation:** Gemini's multi-turn tool protocol differs enough that the
+adapter flattens the exchange into a single prompt rather than translating it
+fully. Adequate for the short bounded loops here, and stated in the module
+rather than hidden.
