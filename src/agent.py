@@ -140,6 +140,7 @@ class ResolutionAgent:
             classifications=", ".join(CLASSIFICATIONS))
         messages: list[dict] = [{"role": "user", "content": context}]
 
+        call_n = 0
         for step_n in range(1, self.max_steps + 1):
             resp = self.provider.complete(system, messages,
                                           tools=TOOL_SCHEMA, max_tokens=1024)
@@ -160,6 +161,10 @@ class ResolutionAgent:
             tool_results = []
 
             for use in resp.tool_calls:
+                # Numbering counts tool calls, not model rounds. A model may
+                # issue several calls in one round; numbering by round makes
+                # the trace read as though steps repeat.
+                call_n += 1
                 fn = self.dispatch.get(use.name)
                 if fn is None:
                     # Refuse anything outside the registry. The agent cannot
@@ -174,13 +179,13 @@ class ResolutionAgent:
                         tr = fn(**use.arguments)
                         payload = {"ok": tr.ok, "summary": tr.summary,
                                    "evidence": tr.evidence}
-                        result.steps.append(Step(step_n, use.name,
+                        result.steps.append(Step(call_n, use.name,
                                                  dict(use.arguments), tr.ok,
                                                  tr.summary))
                     except TypeError as exc:
                         payload = {"ok": False,
                                    "summary": f"invalid arguments: {exc}"}
-                        result.steps.append(Step(step_n, use.name,
+                        result.steps.append(Step(call_n, use.name,
                                                  dict(use.arguments), False,
                                                  payload["summary"]))
 
