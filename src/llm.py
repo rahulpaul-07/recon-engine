@@ -160,29 +160,41 @@ class AnthropicProvider(Provider):
 # Groq (OpenAI-compatible)
 # --------------------------------------------------------------------------
 
-class GroqProvider(Provider):
-    name = "groq"
-    default_model = "llama-3.3-70b-versatile"
+class OpenAICompatibleProvider(Provider):
+    """
+    Base for any vendor exposing an OpenAI-compatible chat completions API.
+
+    Five providers below differ only in base URL, environment variable and
+    default model. Expressing them as configuration of one adapter rather than
+    five classes means the awkward part -- translating Anthropic's tool-result
+    blocks into OpenAI's separate "tool" messages -- is written and debugged
+    once.
+    """
+    name = "openai-compatible"
+    base_url = ""
+    env_key = ""
+    default_model = ""
+    install_hint = "pip install openai"
 
     def __init__(self, model: str | None = None):
-        self.model = model or os.environ.get("RECON_LLM_MODEL",
-                                             self.default_model)
+        self.model = model or os.environ.get(
+            f"RECON_{self.name.upper()}_MODEL", self.default_model)
         self.available = False
         self._client = None
-        if not os.environ.get("GROQ_API_KEY"):
-            self.reason = "GROQ_API_KEY not set"
+        key = os.environ.get(self.env_key)
+        if not key:
+            self.reason = f"{self.env_key} not set"
             return
         try:
-            from groq import Groq
-            self._client = Groq()
+            from openai import OpenAI
+            self._client = OpenAI(api_key=key, base_url=self.base_url)
             self.available = True
             self.reason = ""
         except ImportError:
-            self.reason = "groq SDK not installed (pip install groq)"
+            self.reason = f"openai SDK not installed ({self.install_hint})"
 
     @staticmethod
     def _translate_tools(tools: list[dict]) -> list[dict]:
-        """Anthropic tool schema -> OpenAI function schema."""
         return [{"type": "function",
                  "function": {"name": t["name"],
                               "description": t["description"],
@@ -195,8 +207,9 @@ class GroqProvider(Provider):
         Internal (Anthropic-shaped) history -> OpenAI chat format.
 
         Anthropic carries tool results as content blocks inside a user turn;
-        OpenAI wants a separate message per result with role "tool". This is
-        the only structurally awkward part of the translation.
+        OpenAI wants one message per result with role "tool". An assistant turn
+        that called tools must also carry a tool_calls array, or the follow-up
+        tool messages are rejected as orphaned.
         """
         out: list[dict] = [{"role": "system", "content": system}]
         for m in messages:
@@ -204,16 +217,31 @@ class GroqProvider(Provider):
             if isinstance(content, str):
                 out.append({"role": m["role"], "content": content})
                 continue
-            if m["role"] == "user":
-                for block in content:
-                    if isinstance(block, dict) and block.get("type") == "tool_result":
-                        out.append({"role": "tool",
-                                    "tool_call_id": block["tool_use_id"],
-                                    "content": block["content"]})
-                    elif isinstance(block, dict) and block.get("type") == "text":
-                        out.append({"role": "user", "content": block["text"]})
-            else:
-                out.append(m)
+
+            if m["role"] == "assistant":
+                text = "".join(b.get("text", "") for b in content
+                               if isinstance(b, dict) and b.get("type") == "text")
+                calls = [{"id": b["id"], "type": "function",
+                          "function": {"name": b["name"],
+                                       "arguments": json.dumps(b["input"])}}
+                         for b in content
+                         if isinstance(b, dict) and b.get("type") == "tool_use"]
+                msg: dict[str, Any] = {"role": "assistant",
+                                       "content": text or None}
+                if calls:
+                    msg["tool_calls"] = calls
+                out.append(msg)
+                continue
+
+            for block in content:
+                if not isinstance(block, dict):
+                    continue
+                if block.get("type") == "tool_result":
+                    out.append({"role": "tool",
+                                "tool_call_id": block["tool_use_id"],
+                                "content": block["content"]})
+                elif block.get("type") == "text":
+                    out.append({"role": "user", "content": block["text"]})
         return out
 
     def complete(self, system, messages, tools=None, max_tokens=1024):
@@ -243,8 +271,8 @@ class GroqProvider(Provider):
 
     @staticmethod
     def assistant_turn(resp):
-        # Re-expressed in the internal Anthropic shape so the agent loop does
-        # not need to know which provider produced it.
+        # Re-expressed in the internal Anthropic shape so the agent loop never
+        # needs to know which vendor produced the turn.
         blocks: list[dict] = []
         if resp.text:
             blocks.append({"type": "text", "text": resp.text})
@@ -256,6 +284,41 @@ class GroqProvider(Provider):
     @staticmethod
     def tool_results_turn(results):
         return AnthropicProvider.tool_results_turn(results)
+
+
+class GroqProvider(OpenAICompatibleProvider):
+    name = "groq"
+    base_url = "https://api.groq.com/openai/v1"
+    env_key = "GROQ_API_KEY"
+    default_model = "llama-3.3-70b-versatile"
+
+
+class CerebrasProvider(OpenAICompatibleProvider):
+    name = "cerebras"
+    base_url = "https://api.cerebras.ai/v1"
+    env_key = "CEREBRAS_API_KEY"
+    default_model = "llama-3.3-70b"
+
+
+class OpenRouterProvider(OpenAICompatibleProvider):
+    name = "openrouter"
+    base_url = "https://openrouter.ai/api/v1"
+    env_key = "OPENROUTER_API_KEY"
+    default_model = "meta-llama/llama-3.3-70b-instruct"
+
+
+class TogetherProvider(OpenAICompatibleProvider):
+    name = "together"
+    base_url = "https://api.together.xyz/v1"
+    env_key = "TOGETHER_API_KEY"
+    default_model = "meta-llama/Llama-3.3-70B-Instruct-Turbo"
+
+
+class MistralProvider(OpenAICompatibleProvider):
+    name = "mistral"
+    base_url = "https://api.mistral.ai/v1"
+    env_key = "MISTRAL_API_KEY"
+    default_model = "mistral-large-latest"
 
 
 # --------------------------------------------------------------------------
@@ -385,14 +448,85 @@ class NoProvider(Provider):
 # Selection
 # --------------------------------------------------------------------------
 
-REGISTRY = {
+REGISTRY: dict[str, type[Provider]] = {
     "anthropic": AnthropicProvider,
     "groq": GroqProvider,
+    "cerebras": CerebrasProvider,
     "gemini": GeminiProvider,
+    "openrouter": OpenRouterProvider,
+    "together": TogetherProvider,
+    "mistral": MistralProvider,
     "none": NoProvider,
 }
 
-PREFERENCE = ["anthropic", "groq", "gemini"]
+# Order matters. Anthropic first because the agent's tool-use loop was designed
+# against it; then the free tiers most likely to be configured; then the paid
+# aggregators. A vendor absent from the environment is skipped silently, so the
+# chain is however many providers the operator actually has keys for.
+PREFERENCE = ["anthropic", "groq", "cerebras", "gemini",
+              "openrouter", "together", "mistral"]
+
+
+class FallbackChain(Provider):
+    """
+    Tries providers in order, moving on when one fails.
+
+    Selecting a provider once at startup is not enough. A key can be valid and
+    the account out of credit; a free tier can rate-limit mid-run; a vendor can
+    return 500 on the fourth call of a five-step investigation. Any of those
+    leaves a single-provider setup dead in the middle of a run.
+
+    Failover is per call, and a provider that fails is demoted for the rest of
+    the session rather than retried on every subsequent call -- retrying a dead
+    key thirteen times wastes the run and buries the real error.
+
+    Every failover is recorded in `self.events` so the run can report which
+    providers were used and why it moved, rather than silently producing
+    results from a model the operator did not expect.
+    """
+    name = "chain"
+
+    def __init__(self, providers: list[Provider]):
+        self.providers = [p for p in providers if p.available]
+        self.available = bool(self.providers)
+        self.reason = "" if self.available else "no provider has a usable key"
+        self.demoted: set[str] = set()
+        self.events: list[str] = []
+        self.active: Provider | None = (self.providers[0]
+                                        if self.providers else None)
+
+    @property
+    def chain_names(self) -> list[str]:
+        return [p.name for p in self.providers]
+
+    def complete(self, system, messages, tools=None, max_tokens=1024):
+        last = None
+        for p in self.providers:
+            if p.name in self.demoted:
+                continue
+            resp = p.complete(system, messages, tools, max_tokens)
+            if resp.ok:
+                self.active = p
+                return resp
+            last = resp
+            self.demoted.add(p.name)
+            self.events.append(f"{p.name} failed ({resp.error[:80]}); "
+                               f"demoted for this session")
+
+        return last or LLMResponse(
+            provider=self.name,
+            error="every configured provider failed")
+
+    # Delegation. The conversation shape is provider-specific, so these follow
+    # whichever provider most recently answered.
+    def assistant_turn(self, resp):
+        for p in self.providers:
+            if p.name == resp.provider:
+                return p.assistant_turn(resp)
+        return AnthropicProvider.assistant_turn(resp)
+
+    def tool_results_turn(self, results):
+        return AnthropicProvider.tool_results_turn(results)
 
 
 def get_provider(name: str | None = None) -> Provider:
@@ -402,7 +536,7 @@ def get_provider(name: str | None = None) -> Provider:
     An explicitly named provider is returned even if unavailable, so a
     misconfiguration surfaces as a clear message rather than silently falling
     through to a different vendor and producing results the caller did not
-    expect.
+    expect. With no name given, every configured provider is chained.
     """
     requested = name or os.environ.get("RECON_LLM_PROVIDER")
     if requested:
@@ -412,26 +546,27 @@ def get_provider(name: str | None = None) -> Provider:
                              f"expected one of {sorted(REGISTRY)}")
         return cls()
 
-    for candidate in PREFERENCE:
-        p = REGISTRY[candidate]()
-        if p.available:
-            return p
-    return NoProvider()
+    chain = FallbackChain([REGISTRY[k]() for k in PREFERENCE])
+    return chain if chain.available else NoProvider()
 
 
 def describe() -> str:
-    lines = ["language model providers"]
+    lines = ["language model providers", ""]
     for key in PREFERENCE:
         p = REGISTRY[key]()
         mark = "available" if p.available else f"unavailable ({p.reason})"
-        model = getattr(p, "model", "-")
-        lines.append(f"  {key:<10} {mark:<52} {model}")
+        lines.append(f"  {key:<12} {mark:<50} {getattr(p, 'model', '-')}")
+
     active = get_provider()
     lines.append("")
-    lines.append(f"  active: {active.name}")
-    if not active.available:
-        lines.append("  deterministic paths only; model-dependent steps "
-                     "will report themselves as unavailable")
+    if isinstance(active, FallbackChain):
+        lines.append(f"  failover chain: {' -> '.join(active.chain_names)}")
+        lines.append("  a provider that errors is demoted and the next is "
+                     "tried, within the same run")
+    else:
+        lines.append(f"  active: {active.name}")
+        lines.append("  deterministic paths only; model-dependent steps will "
+                     "report themselves as unavailable")
     return "\n".join(lines)
 
 
