@@ -9,3 +9,4 @@ venv/
 data_alt/
 *.log
 report.html
+agent_traces.json

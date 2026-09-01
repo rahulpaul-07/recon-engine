@@ -198,3 +198,72 @@ rather than a code change.
 
 The original design would have failed on the first error with no second
 attempt. Building the chain the day before turned a dead run into a diagnosis.
+
+---
+
+### 2026-09-02 - The agent disagreed with my answer key, and it was right to.
+
+First full run: 13 exceptions, 13 answered, 45 model calls, no step-limit hits
+and no unparseable verdicts. The agent agreed with the deterministic matcher on
+12 of 13. The disagreement is the most useful result the project has produced.
+
+BNK000004 is a bank credit of Rs 4,200 that I planted as an orphan -- money with
+no corresponding settlement. The matcher classified it that way. The agent did
+not.
+
+It searched settlements by amount and found nothing. It ran subset-sum at the
+default bound, 3 days and 4 terms, and found nothing. Then it widened the search
+itself to 7 days and 8 terms and found five transactions summing to exactly
+Rs 4,200.00. It checked balance continuity to confirm the credit was real, and
+classified the record `ambiguous_match` rather than `orphan_bank_credit`,
+reasoning that the payout may have been batched without a settlement record
+being raised.
+
+I measured whether that match was real. Over a 40-transaction pool, a randomly
+chosen amount finds an exact subset match 5% of the time at 4 terms. At 8 terms
+across the full 134-transaction pool the search space is over 100 million
+combinations, and coincidental exact sums become common rather than rare -- my
+own measurement script did not terminate at that bound.
+
+So the agent's match was almost certainly coincidental. But the finding is not
+that the agent was wrong. Two things are true:
+
+1. **My answer key is weaker than I thought.** I generated the orphan by
+   picking a round amount, and with 134 signed transactions available, most
+   amounts have *some* subset that sums to them. The record is not cleanly
+   orphaned; it is orphaned only under a search bound I chose.
+
+2. **The `max_terms=4` bound is doing more work than I credited it with.** I
+   documented it as an evidential judgement -- that many-term matches are weak
+   evidence -- and I now have the number: 5% coincidence at 4 terms, effectively
+   unbounded above that. The agent overrode the default and produced exactly the
+   false positive the default exists to prevent.
+
+The reason this matters: the engine and the answer key were written by the same
+person and share the same assumptions, so they agree with each other. The agent
+did not share those assumptions, and found the gap. That is the specific
+weakness of the 100% classification figure, demonstrated rather than argued.
+
+Left the generator as it is and documented the property, rather than making the
+orphan amounts subset-proof. Changing the data to protect the score would be
+the wrong direction; the honest version is that the classification depends on a
+stated search bound, and here is what happens when that bound is widened.
+
+---
+
+### 2026-09-02 - Two display bugs in the trace output.
+
+Step numbers read `1. 1. 2. 3.` because the counter incremented per model round
+while a single round can issue several tool calls in parallel. Semantically
+defensible, visually confusing. Now numbering tool calls rather than rounds.
+
+Worth noting the related fact this surfaced: `MAX_STEPS` bounds model rounds,
+not tool calls, so an agent issuing parallel calls can make more than five.
+The bound is on reasoning turns, which is the intent, but the name understates
+what it permits.
+
+Separately, a fully failed run reported "answered by anthropic:claude-sonnet-4-6"
+when nothing had answered -- the chain pre-filled its active provider at
+construction instead of leaving it empty until a candidate succeeded. A summary
+line that names a model which never ran is exactly the kind of quiet
+misstatement this project is supposed to avoid.
