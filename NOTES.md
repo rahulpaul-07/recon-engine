@@ -170,3 +170,31 @@ Accuracy across twelve seeds went from 99.9% +/- 0.2% to 100.0% +/- 0.0%, and
 the two misclassifications are gone. Resolution rate did not move, which is
 what I expected: the bug changed how rows were labelled, not how many were
 resolved.
+
+---
+
+### 2026-09-02 - First live agent run: both providers failed, and the chain held.
+
+The first genuine model call in this project failed twice over, for two
+unrelated reasons, and the run still completed correctly.
+
+Anthropic returned 400: the key was valid but the account had no credit. A
+condition indistinguishable from a working setup until the call is actually
+made. The chain demoted it and moved on.
+
+Groq then returned 404: `llama-3.3-70b-versatile` no longer exists. Groq
+deprecated it in June 2026 and I had written the default from memory rather
+than checking the current catalogue. Demoted as well, and the run reported
+"every configured provider failed" with both reasons printed.
+
+Two things worth recording. First, the failover mechanism was exercised by a
+real double failure rather than a simulated one, and behaved as designed: no
+crash, no record misclassified, both causes surfaced. Second, the second
+failure is a class of bug worth naming -- a hardcoded model identifier is a
+dependency on a vendor's catalogue at a point in time, and vendors retire
+models. Changed the default to the recommended replacement and made it
+overridable per provider, so a future retirement is a environment variable
+rather than a code change.
+
+The original design would have failed on the first error with no second
+attempt. Building the chain the day before turned a dead run into a diagnosis.

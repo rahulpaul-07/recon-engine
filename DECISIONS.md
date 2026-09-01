@@ -185,3 +185,32 @@ Seven providers are supported. Five of them speak the OpenAI chat dialect and
 are expressed as configuration of one adapter rather than five classes, so the
 awkward part -- translating Anthropic's tool-result blocks into OpenAI's
 separate `tool` messages -- is written and debugged once.
+
+---
+
+## D11 - Failover walks provider AND model, and demotion is scoped by failure kind
+
+**Chosen:** each provider declares a list of models. The chain walks
+provider/model pairs -- twenty by default across seven vendors -- and classifies
+each failure before deciding what to demote.
+
+- A retired or unknown model identifier demotes **that model only**. The
+  provider stays live and the next model on it is tried.
+- An unfunded account, revoked key or exhausted quota demotes **the whole
+  provider**, and its remaining models are skipped rather than each failing
+  identically.
+- An unrecognised error is treated as model-level, which is the conservative
+  choice: it costs one candidate instead of discarding a provider that may work
+  with a different model.
+
+**Why:** the first version demoted whole providers on any error. The first live
+run hit a valid Groq key with a retired model name and threw the provider away
+over a 404. The key was fine; only the identifier was stale.
+
+Model identifiers are a dependency on a vendor's catalogue at a point in time,
+and vendors retire models on their own schedule -- Groq deprecated
+`llama-3.3-70b-versatile` in June 2026. Treating that as equivalent to a dead
+account conflates two failures with completely different remedies.
+
+Every candidate is overridable per provider by environment variable, so a future
+retirement is configuration rather than a code change.

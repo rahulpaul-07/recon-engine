@@ -109,7 +109,9 @@ def main() -> None:
     print(f"EXCEPTION INVESTIGATION  --  {len(exceptions)} records")
     from llm import FallbackChain
     if isinstance(provider, FallbackChain):
-        print(f"provider chain: {' -> '.join(provider.chain_names)}")
+        print(f"provider chain: {len(provider.candidates)} provider/model "
+              f"candidates, first is "
+              f"{provider.candidates[0][0]}:{provider.candidates[0][1]}")
     else:
         print(f"provider: {provider.name}"
               f"{'' if provider.available else '  (unavailable)'}")
@@ -166,9 +168,13 @@ def main() -> None:
             print(f"    {name:<34} {n}")
     print("-" * 74)
 
+    if isinstance(provider, FallbackChain):
+        print(f"  answered by         {provider.active.name}:"
+              f"{provider.active_model}" if provider.active else "")
+
     if isinstance(provider, FallbackChain) and provider.events:
         print()
-        print("  provider failover during this run")
+        print("  provider/model failover during this run")
         for ev in provider.events:
             print(f"    {ev}")
 

@@ -82,6 +82,8 @@ class LLMResponse:
 class Provider:
     name = "base"
     available = False
+    models: list[str] = []
+    default_model = ""
 
     def complete(self, system: str, messages: list[dict],
                  tools: list[dict] | None = None,
@@ -105,11 +107,12 @@ class Provider:
 
 class AnthropicProvider(Provider):
     name = "anthropic"
-    default_model = "claude-sonnet-4-6"
+    models = ["claude-sonnet-4-6", "claude-haiku-4-5-20251001"]
 
     def __init__(self, model: str | None = None):
-        self.model = model or os.environ.get("RECON_LLM_MODEL",
-                                             self.default_model)
+        override = model or os.environ.get("RECON_ANTHROPIC_MODEL")
+        self.candidates = [override] if override else list(self.models)
+        self.model = self.candidates[0]
         self.available = False
         self._client = None
         if not os.environ.get("ANTHROPIC_API_KEY"):
@@ -123,10 +126,11 @@ class AnthropicProvider(Provider):
         except ImportError:
             self.reason = "anthropic SDK not installed (pip install anthropic)"
 
-    def complete(self, system, messages, tools=None, max_tokens=1024):
+    def complete(self, system, messages, tools=None, max_tokens=1024,
+                 model: str | None = None):
         try:
             kwargs: dict[str, Any] = {
-                "model": self.model,
+                "model": model or self.model,
                 "max_tokens": max_tokens,
                 "system": system,
                 "messages": messages,
@@ -173,12 +177,13 @@ class OpenAICompatibleProvider(Provider):
     name = "openai-compatible"
     base_url = ""
     env_key = ""
-    default_model = ""
+    models: list[str] = []
     install_hint = "pip install openai"
 
     def __init__(self, model: str | None = None):
-        self.model = model or os.environ.get(
-            f"RECON_{self.name.upper()}_MODEL", self.default_model)
+        override = model or os.environ.get(f"RECON_{self.name.upper()}_MODEL")
+        self.candidates = [override] if override else list(self.models)
+        self.model = self.candidates[0] if self.candidates else ""
         self.available = False
         self._client = None
         key = os.environ.get(self.env_key)
@@ -244,10 +249,11 @@ class OpenAICompatibleProvider(Provider):
                     out.append({"role": "user", "content": block["text"]})
         return out
 
-    def complete(self, system, messages, tools=None, max_tokens=1024):
+    def complete(self, system, messages, tools=None, max_tokens=1024,
+                 model: str | None = None):
         try:
             kwargs: dict[str, Any] = {
-                "model": self.model,
+                "model": model or self.model,
                 "max_tokens": max_tokens,
                 "messages": self._translate_messages(system, messages),
             }
@@ -290,35 +296,49 @@ class GroqProvider(OpenAICompatibleProvider):
     name = "groq"
     base_url = "https://api.groq.com/openai/v1"
     env_key = "GROQ_API_KEY"
-    default_model = "llama-3.3-70b-versatile"
+    models = ["openai/gpt-oss-120b", "openai/gpt-oss-20b",
+              "qwen/qwen3.6-27b", "llama-3.3-70b-versatile"]
+    # Groq retires models on a rolling basis; llama-3.3-70b-versatile was
+    # deprecated in June 2026. Override with RECON_GROQ_MODEL if this one
+    # has been retired too -- the failure mode is a 404 naming the model,
+    # which the failover chain reports rather than swallowing.
+    default_model = "openai/gpt-oss-120b"
 
 
 class CerebrasProvider(OpenAICompatibleProvider):
     name = "cerebras"
     base_url = "https://api.cerebras.ai/v1"
     env_key = "CEREBRAS_API_KEY"
-    default_model = "llama-3.3-70b"
+    models = ["gpt-oss-120b", "llama-3.3-70b"]
+    models = ["gpt-oss-120b", "llama-3.3-70b", "llama3.1-8b"]
 
 
 class OpenRouterProvider(OpenAICompatibleProvider):
     name = "openrouter"
     base_url = "https://openrouter.ai/api/v1"
     env_key = "OPENROUTER_API_KEY"
-    default_model = "meta-llama/llama-3.3-70b-instruct"
+    models = ["meta-llama/llama-3.3-70b-instruct", "google/gemini-2.0-flash-001", "mistralai/mistral-large"]
+    models = ["meta-llama/llama-3.3-70b-instruct",
+              "openai/gpt-oss-120b",
+              "google/gemini-2.0-flash-001",
+              "mistralai/mistral-large"]
 
 
 class TogetherProvider(OpenAICompatibleProvider):
     name = "together"
     base_url = "https://api.together.xyz/v1"
     env_key = "TOGETHER_API_KEY"
-    default_model = "meta-llama/Llama-3.3-70B-Instruct-Turbo"
+    models = ["meta-llama/Llama-3.3-70B-Instruct-Turbo", "Qwen/Qwen2.5-72B-Instruct-Turbo"]
+    models = ["meta-llama/Llama-3.3-70B-Instruct-Turbo",
+              "Qwen/Qwen2.5-72B-Instruct-Turbo"]
 
 
 class MistralProvider(OpenAICompatibleProvider):
     name = "mistral"
     base_url = "https://api.mistral.ai/v1"
     env_key = "MISTRAL_API_KEY"
-    default_model = "mistral-large-latest"
+    models = ["mistral-large-latest", "mistral-small-latest"]
+    models = ["mistral-large-latest", "mistral-small-latest"]
 
 
 # --------------------------------------------------------------------------
@@ -327,11 +347,13 @@ class MistralProvider(OpenAICompatibleProvider):
 
 class GeminiProvider(Provider):
     name = "gemini"
-    default_model = "gemini-2.0-flash"
+    models = ["gemini-2.0-flash", "gemini-2.0-flash-lite",
+              "gemini-1.5-flash"]
 
     def __init__(self, model: str | None = None):
-        self.model = model or os.environ.get("RECON_LLM_MODEL",
-                                             self.default_model)
+        override = model or os.environ.get("RECON_GEMINI_MODEL")
+        self.candidates = [override] if override else list(self.models)
+        self.model = self.candidates[0]
         self.available = False
         self._client = None
         if not os.environ.get("GEMINI_API_KEY"):
@@ -378,7 +400,8 @@ class GeminiProvider(Provider):
                         parts.append(f"tool returned: {b['content']}")
         return "\n".join(parts)
 
-    def complete(self, system, messages, tools=None, max_tokens=1024):
+    def complete(self, system, messages, tools=None, max_tokens=1024,
+                 model: str | None = None):
         try:
             from google.genai import types
             cfg: dict[str, Any] = {"max_output_tokens": max_tokens}
@@ -388,7 +411,7 @@ class GeminiProvider(Provider):
                         name=t["name"], description=t["description"],
                         parameters=t["input_schema"]) for t in tools])]
             resp = self._client.models.generate_content(
-                model=self.model,
+                model=model or self.model,
                 contents=self._flatten(system, messages),
                 config=types.GenerateContentConfig(**cfg))
         except Exception as exc:                          # noqa: BLE001
@@ -431,7 +454,8 @@ class NoProvider(Provider):
     available = False
     reason = "no provider configured"
 
-    def complete(self, system, messages, tools=None, max_tokens=1024):
+    def complete(self, system, messages, tools=None, max_tokens=1024,
+                 model: str | None = None):
         return LLMResponse(provider=self.name,
                            error="no language model provider configured")
 
@@ -467,22 +491,51 @@ PREFERENCE = ["anthropic", "groq", "cerebras", "gemini",
               "openrouter", "together", "mistral"]
 
 
+# Distinguishing failure kinds matters. A retired model identifier should cost
+# that one model; an unfunded account or a revoked key should cost the whole
+# provider. Treating them alike -- as the first version of this chain did --
+# discards a working provider because one of its model names went stale.
+
+MODEL_LEVEL_MARKERS = ("does not exist", "model_not_found", "unknown model",
+                       "invalid model", "decommissioned", "not found",
+                       "404", "no access to")
+
+PROVIDER_LEVEL_MARKERS = ("credit balance", "insufficient", "quota",
+                          "authentication", "invalid api key", "unauthorized",
+                          "401", "403", "billing", "payment")
+
+
+def classify_failure(error: str) -> str:
+    """Return 'model' or 'provider' for a failure message."""
+    low = error.lower()
+    if any(m in low for m in PROVIDER_LEVEL_MARKERS):
+        return "provider"
+    if any(m in low for m in MODEL_LEVEL_MARKERS):
+        return "model"
+    # Unknown failures are treated as model-level, which is the conservative
+    # choice: it costs one candidate rather than discarding a provider that
+    # may work with a different model.
+    return "model"
+
+
 class FallbackChain(Provider):
     """
-    Tries providers in order, moving on when one fails.
+    Walks provider/model candidates in order, moving on when one fails.
 
-    Selecting a provider once at startup is not enough. A key can be valid and
-    the account out of credit; a free tier can rate-limit mid-run; a vendor can
-    return 500 on the fourth call of a five-step investigation. Any of those
-    leaves a single-provider setup dead in the middle of a run.
+    Selecting once at startup is not enough. A key can be valid with an empty
+    account; a free tier can rate-limit mid-run; a vendor can retire a model
+    identifier between releases. Any of those leaves a single-candidate setup
+    dead in the middle of a run.
 
-    Failover is per call, and a provider that fails is demoted for the rest of
-    the session rather than retried on every subsequent call -- retrying a dead
-    key thirteen times wastes the run and buries the real error.
+    Failover is per call. A failed candidate is demoted for the rest of the
+    session rather than retried on every subsequent call -- retrying a dead
+    candidate once per record wastes the run and buries the real error under
+    repeats.
 
-    Every failover is recorded in `self.events` so the run can report which
-    providers were used and why it moved, rather than silently producing
-    results from a model the operator did not expect.
+    Demotion is scoped by failure kind: a retired model costs that model, a
+    dead account costs the provider. Every demotion is recorded in `events`
+    so a run reports which candidates were used and why it moved, rather than
+    silently answering from a model the operator did not expect.
     """
     name = "chain"
 
@@ -490,35 +543,54 @@ class FallbackChain(Provider):
         self.providers = [p for p in providers if p.available]
         self.available = bool(self.providers)
         self.reason = "" if self.available else "no provider has a usable key"
-        self.demoted: set[str] = set()
+        self.dead_models: set[tuple[str, str]] = set()
+        self.dead_providers: set[str] = set()
         self.events: list[str] = []
         self.active: Provider | None = (self.providers[0]
                                         if self.providers else None)
+        self.active_model = (self.providers[0].candidates[0]
+                             if self.providers else "")
+
+    @property
+    def candidates(self) -> list[tuple[str, str]]:
+        return [(p.name, m) for p in self.providers for m in p.candidates]
 
     @property
     def chain_names(self) -> list[str]:
-        return [p.name for p in self.providers]
+        return [f"{p.name}:{p.candidates[0]}" for p in self.providers]
 
-    def complete(self, system, messages, tools=None, max_tokens=1024):
+    def complete(self, system, messages, tools=None, max_tokens=1024,
+                 model: str | None = None):
         last = None
         for p in self.providers:
-            if p.name in self.demoted:
+            if p.name in self.dead_providers:
                 continue
-            resp = p.complete(system, messages, tools, max_tokens)
-            if resp.ok:
-                self.active = p
-                return resp
-            last = resp
-            self.demoted.add(p.name)
-            self.events.append(f"{p.name} failed ({resp.error[:80]}); "
-                               f"demoted for this session")
+            for m in p.candidates:
+                if (p.name, m) in self.dead_models:
+                    continue
+
+                resp = p.complete(system, messages, tools, max_tokens, model=m)
+                if resp.ok:
+                    self.active, self.active_model = p, m
+                    return resp
+
+                last = resp
+                kind = classify_failure(resp.error)
+                if kind == "provider":
+                    self.dead_providers.add(p.name)
+                    self.events.append(
+                        f"{p.name} unusable ({resp.error[:70]}); "
+                        f"provider demoted")
+                    break
+                self.dead_models.add((p.name, m))
+                self.events.append(
+                    f"{p.name}:{m} unusable ({resp.error[:70]}); "
+                    f"model demoted, other models on this provider still live")
 
         return last or LLMResponse(
             provider=self.name,
-            error="every configured provider failed")
+            error="every configured provider and model failed")
 
-    # Delegation. The conversation shape is provider-specific, so these follow
-    # whichever provider most recently answered.
     def assistant_turn(self, resp):
         for p in self.providers:
             if p.name == resp.provider:
@@ -560,9 +632,14 @@ def describe() -> str:
     active = get_provider()
     lines.append("")
     if isinstance(active, FallbackChain):
-        lines.append(f"  failover chain: {' -> '.join(active.chain_names)}")
-        lines.append("  a provider that errors is demoted and the next is "
-                     "tried, within the same run")
+        pairs = active.candidates
+        lines.append(f"  failover chain: {len(pairs)} provider/model "
+                     f"candidate(s)")
+        for name, m in pairs:
+            lines.append(f"    {name}:{m}")
+        lines.append("")
+        lines.append("  a retired model demotes that model; a dead account "
+                     "demotes the provider")
     else:
         lines.append(f"  active: {active.name}")
         lines.append("  deterministic paths only; model-dependent steps will "
