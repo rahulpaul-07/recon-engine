@@ -408,7 +408,10 @@ class Generator:
                 continue
             g.net_amount_paise += rupees_to_paise("10.00")
             used.add(l.order_id)
-            self._truth(l.order_id, "order", "net_arithmetic_error", g.txn_id,
+            # Recorded against the TRANSACTION, not the order: the broken
+            # identity is a property of the gateway row itself, and that is
+            # the entity the engine reports it against.
+            self._truth(g.txn_id, "txn", "net_arithmetic_error", l.order_id,
                         "gross - fee - gst != net; the gateway's own row is "
                         "internally inconsistent")
 
@@ -470,7 +473,11 @@ class Generator:
             # balance moving -- detectable only via the balance column
             if skipped > 0 and sid != "__orphan__" and self.rng.random() < 0.12:
                 skipped -= 1
-                self._truth(bank_id, "bank_row", "missing_bank_row", sid,
+                # Keyed to the gap, not to a row -- the dropped line never
+                # appears in the statement, so it has no id the engine could
+                # reference. The next row issued reveals the discontinuity.
+                self._truth(f"GAP_BEFORE_BNK{self._bank_seq + 1:06d}",
+                            "statement_gap", "missing_bank_row", sid,
                             "settlement paid but its statement line is absent; "
                             "detectable only from the running balance gap")
                 continue

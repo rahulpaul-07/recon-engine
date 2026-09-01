@@ -3,9 +3,9 @@ BNK000001,bank_row,messy_narration,setl_0000,UTR absent or mangled in narration;
 BNK000004,bank_row,orphan_bank_credit,,REAL BREAK: bank credit corresponds to no settlement
 BNK000006,bank_row,orphan_bank_credit,,REAL BREAK: bank credit corresponds to no settlement
 BNK000008,bank_row,messy_narration,setl_0005,UTR absent or mangled in narration; must be recovered from free text or inferred from amount + date
-BNK000013,bank_row,missing_bank_row,setl_0010,settlement paid but its statement line is absent; detectable only from the running balance gap
 BNK000015,bank_row,messy_narration,setl_0012,UTR absent or mangled in narration; must be recovered from free text or inferred from amount + date
 BNK000018,bank_row,messy_narration,setl_0015,UTR absent or mangled in narration; must be recovered from free text or inferred from amount + date
+GAP_BEFORE_BNK000014,statement_gap,missing_bank_row,setl_0010,settlement paid but its statement line is absent; detectable only from the running balance gap
 ORD4000,order,clean,,matches 1:1 with its payment
 ORD4001,order,unsettled,,captured near end of window; not yet paid out. CORRECTLY unmatched -- not an error
 ORD4002,order,partial_refund,,partial refund of 449.00 against 899.00
@@ -47,7 +47,7 @@ ORD4037,order,clean,,matches 1:1 with its payment
 ORD4038,order,fee_mismatch,pay_000039,gateway fee exceeds rule for netbanking by 5.00
 ORD4039,order,clean,,matches 1:1 with its payment
 ORD4040,order,clean,,matches 1:1 with its payment
-ORD4041,order,net_arithmetic_error,pay_000042,gross - fee - gst != net; the gateway's own row is internally inconsistent
+ORD4041,order,clean,,matches 1:1 with its payment
 ORD4042,order,clean,,matches 1:1 with its payment
 ORD4043,order,refund,pay_000044,full refund; net settlement contribution is negative
 ORD4044,order,clean,,matches 1:1 with its payment
@@ -61,7 +61,7 @@ ORD4051,order,fee_mismatch,pay_000052,gateway fee exceeds rule for upi by 2.25
 ORD4052,order,clean,,matches 1:1 with its payment
 ORD4053,order,clean,,matches 1:1 with its payment
 ORD4054,order,missing_payment,,REAL BREAK: order marked paid but no gateway record exists
-ORD4055,order,net_arithmetic_error,pay_000056,gross - fee - gst != net; the gateway's own row is internally inconsistent
+ORD4055,order,clean,,matches 1:1 with its payment
 ORD4056,order,clean,,matches 1:1 with its payment
 ORD4057,order,clean,,matches 1:1 with its payment
 ORD4058,order,refund,pay_000059,full refund; net settlement contribution is negative
@@ -126,3 +126,5 @@ ORD4116,order,rounding_noise,pay_000117,"1 paise fee drift from a different roun
 ORD4117,order,partial_refund,,partial refund of 6250.00 against 12500.00
 ORD4118,order,refund,pay_000119,full refund; net settlement contribution is negative
 ORD4119,order,clean,,matches 1:1 with its payment
+pay_000042,txn,net_arithmetic_error,ORD4041,gross - fee - gst != net; the gateway's own row is internally inconsistent
+pay_000056,txn,net_arithmetic_error,ORD4055,gross - fee - gst != net; the gateway's own row is internally inconsistent

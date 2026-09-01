@@ -221,11 +221,18 @@ class Engine:
                 expected = prev.balance_paise + row.movement_paise
                 if expected != row.balance_paise:
                     gap = row.balance_paise - expected
+                    # The gap describes the space BETWEEN two rows, not the
+                    # row that reveals it. Emitting it against the row would
+                    # overwrite that row's own classification -- which is how
+                    # this silently corrupted messy-narration and orphan rows
+                    # that happened to follow a dropped line.
                     self._emit(
-                        entity_id=row.bank_txn_id, entity_type="bank_row",
+                        entity_id=f"GAP_BEFORE_{row.bank_txn_id}",
+                        entity_type="statement_gap",
                         classification="missing_bank_row", tier=0,
                         detail=(f"balance gap of {paise_to_rupees_str(gap)} "
-                                f"before this row: a statement line is absent"),
+                                f"before {row.bank_txn_id}: a statement line "
+                                f"is absent"),
                         resolved=False)
             prev = row
 
