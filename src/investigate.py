@@ -169,8 +169,11 @@ def main() -> None:
     print("-" * 74)
 
     if isinstance(provider, FallbackChain):
-        print(f"  answered by         {provider.active.name}:"
-              f"{provider.active_model}" if provider.active else "")
+        if provider.active:
+            print(f"  answered by         {provider.active.name}:"
+                  f"{provider.active_model}")
+        else:
+            print("  answered by         nothing - every candidate failed")
 
     if isinstance(provider, FallbackChain) and provider.events:
         print()

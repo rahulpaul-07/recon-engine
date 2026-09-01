@@ -546,10 +546,11 @@ class FallbackChain(Provider):
         self.dead_models: set[tuple[str, str]] = set()
         self.dead_providers: set[str] = set()
         self.events: list[str] = []
-        self.active: Provider | None = (self.providers[0]
-                                        if self.providers else None)
-        self.active_model = (self.providers[0].candidates[0]
-                             if self.providers else "")
+        # Not set until a candidate actually succeeds. Pre-filling these
+        # made a fully failed run report an answering model that never
+        # answered.
+        self.active: Provider | None = None
+        self.active_model = ""
 
     @property
     def candidates(self) -> list[tuple[str, str]]:
