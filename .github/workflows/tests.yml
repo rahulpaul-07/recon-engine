@@ -1,0 +1,78 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # The suite must not depend on one interpreter version. 3.10 is the
+        # floor because the codebase uses PEP 604 unions (str | None).
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install test dependencies
+        # Deliberately not installing any provider SDK. The suite covers the
+        # agent's constraints by calling them directly, so it must pass with
+        # no model available and no network access.
+        run: python -m pip install --upgrade pip pytest
+
+      - name: Run tests
+        run: python -m pytest tests/ -q
+
+  reconcile:
+    # Proves the pipeline runs end to end from a clean checkout, not just that
+    # the unit tests pass.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Generate a batch
+        run: python src/generate_data.py --seed 42 --orders 120
+
+      - name: Reconcile and grade against the answer key
+        run: python src/evaluate.py --data data
+
+      - name: Assert classification accuracy is total
+        # A regression that lowers accuracy should fail the build rather than
+        # quietly change a number in the README.
+        run: |
+          python src/evaluate.py --data data | tee result.txt
+          grep -q "classified correctly  129 (100.0%)" result.txt
+
+      - name: Check variance across independent batches
+        run: python src/evaluate.py --seeds 5 --orders 150
+
+      - name: Build the report
+        run: python src/report.py --data data --out report.html
+
+  provider-degradation:
+    # The system must run correctly with no language model configured. This job
+    # deliberately sets no API keys.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python src/generate_data.py --seed 42 --orders 120
+      - name: Confirm no provider is available
+        run: python src/llm.py | grep -q "deterministic paths only"
+      - name: Confirm the engine still reconciles
+        run: python src/evaluate.py --data data | grep -q "100.0%"

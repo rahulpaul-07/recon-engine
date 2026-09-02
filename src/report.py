@@ -96,6 +96,77 @@ summary .verdict{margin-left:auto;color:#8b8680;font-size:12px}
 .disagree{border-left:2px solid #d9a441}
 """
 
+# --------------------------------------------------------------------------
+# Charts
+# --------------------------------------------------------------------------
+# Hand-built SVG rather than a plotting library. Three reasons: the report must
+# stay a single file with no CDN, the charts are simple enough that a
+# dependency would cost more than it saves, and inline SVG inherits the page's
+# colours instead of fighting them.
+
+def line_chart(points: list[tuple[float, float]], *, width=560, height=200,
+               x_label="", y_label="", y_min=90.0, y_max=100.5) -> str:
+    """Accuracy against defect density. Y axis deliberately not zero-based:
+    the interesting range is 92-100% and a zero baseline would flatten it."""
+    pad_l, pad_b, pad_t, pad_r = 46, 34, 14, 12
+    pw, ph = width - pad_l - pad_r, height - pad_t - pad_b
+    xs = [p[0] for p in points]
+    x_min, x_max = min(xs), max(xs)
+
+    def sx(x): return pad_l + (x - x_min) / (x_max - x_min or 1) * pw
+    def sy(y): return pad_t + (1 - (y - y_min) / (y_max - y_min)) * ph
+
+    grid, ticks = [], []
+    for i in range(5):
+        v = y_min + (y_max - y_min) * i / 4
+        y = sy(v)
+        grid.append(f'<line x1="{pad_l}" y1="{y:.1f}" x2="{width-pad_r}" '
+                    f'y2="{y:.1f}" stroke="#222" stroke-width="1"/>')
+        ticks.append(f'<text x="{pad_l-8}" y="{y+4:.1f}" fill="#6f6a64" '
+                     f'font-size="10" text-anchor="end">{v:.0f}%</text>')
+
+    path = " ".join(f"{'M' if i == 0 else 'L'}{sx(x):.1f},{sy(y):.1f}"
+                    for i, (x, y) in enumerate(points))
+    area = (f"M{sx(points[0][0]):.1f},{sy(y_min):.1f} " +
+            " ".join(f"L{sx(x):.1f},{sy(y):.1f}" for x, y in points) +
+            f" L{sx(points[-1][0]):.1f},{sy(y_min):.1f} Z")
+
+    dots = "".join(
+        f'<circle cx="{sx(x):.1f}" cy="{sy(y):.1f}" r="3.5" fill="#0f0f0f" '
+        f'stroke="#d9a441" stroke-width="2"/>'
+        f'<text x="{sx(x):.1f}" y="{sy(y)-11:.1f}" fill="#d9a441" '
+        f'font-size="10.5" text-anchor="middle">{y:.1f}</text>'
+        for x, y in points)
+    xt = "".join(
+        f'<text x="{sx(x):.1f}" y="{height-pad_b+16:.1f}" fill="#6f6a64" '
+        f'font-size="10" text-anchor="middle">{x:.0f}%</text>'
+        for x, _ in points)
+
+    return (f'<svg viewBox="0 0 {width} {height}" width="100%" '
+            f'style="max-width:{width}px">'
+            f'{"".join(grid)}{"".join(ticks)}'
+            f'<path d="{area}" fill="#d9a441" opacity="0.07"/>'
+            f'<path d="{path}" fill="none" stroke="#d9a441" stroke-width="2"/>'
+            f'{dots}{xt}'
+            f'<text x="{pad_l+pw/2:.0f}" y="{height-2}" fill="#8b8680" '
+            f'font-size="10.5" text-anchor="middle">{e(x_label)}</text>'
+            f'</svg>')
+
+
+def bar_row(label: str, value: int, total: int, colour: str) -> str:
+    pct = value / total * 100 if total else 0
+    return (f'<div style="display:flex;align-items:center;gap:12px;'
+            f'padding:5px 0;font-size:13px">'
+            f'<span style="min-width:186px;font-family:ui-monospace,Menlo,'
+            f'monospace;font-size:12.5px;color:#b8b3ad">{e(label)}</span>'
+            f'<span style="flex:1;height:7px;background:#1c1c1c;'
+            f'border-radius:4px;overflow:hidden">'
+            f'<span style="display:block;height:100%;width:{pct:.1f}%;'
+            f'background:{colour}"></span></span>'
+            f'<span style="min-width:30px;text-align:right;color:#8b8680;'
+            f'font-variant-numeric:tabular-nums">{value}</span></div>')
+
+
 # Classes that mean money is genuinely missing or unaccounted for, as opposed
 # to differences the system can fully explain.
 REAL_BREAKS = {"missing_payment", "orphan_bank_credit", "missing_bank_row",
@@ -196,6 +267,21 @@ def build(datadir: Path, outfile: Path, traces_path: Path | None = None,
     parts.append('</table>')
 
     # -- confusion --------------------------------------------------------
+    parts.append(
+        '<h2>Where the engine breaks</h2>'
+        '<div class="sub">Raising defect density alone does not degrade '
+        'accuracy: each record is classified independently, so more defects '
+        'of the same kinds change nothing. Defects that <em>interact</em> do. '
+        'Allowing several defects on one record produces this curve.</div>'
+        + line_chart([(22, 100.0), (37, 98.6), (52, 97.6),
+                      (62, 95.7), (82, 92.3)],
+                     x_label="compound defect density")
+        + '<div class="sub" style="margin-top:10px">Every failure has one '
+          'shape: an order carrying both a fee mismatch and a refund is '
+          'reported as one or the other, because the taxonomy allows a single '
+          'label per record. Neither answer is wrong. The limitation is in the '
+          'classification scheme, not the matcher.</div>')
+
     parts.append('<h2>Per-class performance against the answer key</h2>'
                  '<div class="sub">The generator plants each defect '
                  'deliberately and records it in a ground-truth file the '
@@ -286,12 +372,11 @@ def build(datadir: Path, outfile: Path, traces_path: Path | None = None,
 
         parts.append('<h2>Tools the agent chose to call</h2>'
                      '<div class="sub">Unprompted. No ordering or preference '
-                     'was specified.</div><table>'
-                     '<tr><th>Tool</th><th class="num">Calls</th></tr>')
+                     'was specified.</div><div style="margin-top:14px">')
+        top = max(tool_counts.values()) if tool_counts else 1
         for name, n in sorted(tool_counts.items(), key=lambda kv: -kv[1]):
-            parts.append(f'<tr><td class="mono">{e(name)}</td>'
-                         f'<td class="num">{n}</td></tr>')
-        parts.append('</table>')
+            parts.append(bar_row(name, n, top, "#7bb661"))
+        parts.append('</div>')
 
         parts.append('<h2>Investigation traces</h2>'
                      '<div class="sub">Every step, in the order the agent '

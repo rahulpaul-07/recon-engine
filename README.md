@@ -1,5 +1,11 @@
 # Three-way payment reconciliation engine
 
+[![tests](https://github.com/rahulpaul-07/recon-engine/actions/workflows/tests.yml/badge.svg)](https://github.com/rahulpaul-07/recon-engine/actions/workflows/tests.yml)
+[![python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue)](https://github.com/rahulpaul-07/recon-engine/actions)
+[![tests](https://img.shields.io/badge/tests-67%20passing-brightgreen)](tests/)
+[![accuracy](https://img.shields.io/badge/classification-100%25%20vs%20answer%20key-brightgreen)](#results)
+[![license](https://img.shields.io/badge/license-MIT-lightgrey)](LICENSE)
+
 **[Live report](https://rahulpaul-07.github.io/recon-engine/)** — generated
 output from the run described below: match rate, per-class metrics against the
 answer key, every exception with its reason, and the agent's full investigation
@@ -72,25 +78,45 @@ spreadsheet.
 
 ## Architecture
 
-```
-ledger.csv   gateway.csv   settlements.csv   bank.csv
-     |______________|__________|________|_________|
-                              |
-                       tiered matcher
-        tier 0  single-source consistency checks
-        tier 1  exact key joins                    124
-        tier 2  deterministic inference              4
-                              |
-                     unresolved records
-                              |
-                         agent loop
-        9 investigation tools, max 5 model rounds
-        7 providers / 20 candidates, scoped failover
-                              |
-                     verification gate
-         exists?  ·  amount ties?  ·  date in window?
-                              |
-         resolved (with evidence)  |  escalated (with note)
+```mermaid
+flowchart TD
+    L[ledger.csv<br/>merchant orders]:::src
+    G[gateway.csv<br/>payments, refunds,<br/>chargebacks]:::src
+    S[settlements.csv<br/>payout report]:::src
+    B[bank.csv<br/>statement lines]:::src
+
+    L --> M
+    G --> M
+    S --> M
+    B --> M
+
+    M{{tiered matcher}}:::core
+    M --> T0[tier 0<br/>single-source consistency]:::tier
+    M --> T1[tier 1<br/>exact key joins<br/><b>124</b>]:::tier
+    M --> T2[tier 2<br/>deterministic inference<br/><b>4</b>]:::tier
+
+    T0 --> X[13 unresolved records]:::exc
+    T1 --> X
+    T2 --> X
+
+    X --> A{{resolution agent<br/>9 tools · max 5 rounds}}:::ai
+    A --> V{verification gate<br/>exists? · ties? · in window?}:::gate
+    V -->|all checks pass| R[resolved<br/>with cited evidence]:::ok
+    V -->|any check fails| E[escalated<br/>with analyst note]:::warn
+
+    K[(ground_truth.csv)]:::key -.->|grading only,<br/>never read by the engine| EV[evaluation harness]:::core
+    T1 -.-> EV
+    T2 -.-> EV
+
+    classDef src fill:#1b2838,stroke:#3a5878,color:#d8e4f0
+    classDef core fill:#2a2416,stroke:#6b5a2a,color:#f0e6d0
+    classDef tier fill:#161d16,stroke:#3a5a3a,color:#d8f0d8
+    classDef exc fill:#2a1c1c,stroke:#6b3a3a,color:#f0d8d8
+    classDef ai fill:#241c2e,stroke:#5a3a6b,color:#e8d8f0
+    classDef gate fill:#2e2410,stroke:#7a6020,color:#f0e0b0
+    classDef ok fill:#152615,stroke:#3a6b3a,color:#d0f0d0
+    classDef warn fill:#2e2410,stroke:#7a6020,color:#f0e0b0
+    classDef key fill:#1c1c1c,stroke:#4a4a4a,color:#c0c0c0
 ```
 
 Every resolution records the tier that produced it, so the result is stratified
@@ -176,6 +202,22 @@ the fix would be to return a set of labels and grade against set overlap.
 Recorded rather than fixed. It touches the answer key, the matcher's return
 type, the evaluator and the report, and stating a known limitation is worth more
 than widening a taxonomy on the last day of a build.
+
+## Continuous integration
+
+Every push runs three jobs:
+
+| Job | What it proves |
+|---|---|
+| `test` | 67 tests pass on Python 3.10 through 3.13, with no provider SDK installed |
+| `reconcile` | a clean checkout generates, reconciles, grades and reports end to end |
+| `provider-degradation` | the engine reconciles correctly with **no** language model configured |
+
+The `reconcile` job asserts the exact accuracy figure. A regression that lowers
+it fails the build rather than quietly changing a number in this file.
+
+The `provider-degradation` job sets no API keys deliberately. Graceful
+degradation is a designed path, so it is tested like one.
 
 ## Two layers, two strengths of guarantee
 
