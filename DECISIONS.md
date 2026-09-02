@@ -214,3 +214,28 @@ account conflates two failures with completely different remedies.
 
 Every candidate is overridable per provider by environment variable, so a future
 retirement is configuration rather than a code change.
+
+---
+
+## D12 - Agent constraints are enforced in code so that they are testable
+
+**Chosen:** every constraint on the agent -- step limit, closed tool registry,
+fixed classification taxonomy, evidence required for a claimed resolution -- is
+enforced in the calling code rather than requested in the prompt.
+
+**Why:** a constraint expressed in a prompt can only be verified by running a
+model and hoping. A constraint expressed in code can be tested directly, by
+passing it the output a misbehaving model would produce. The test suite calls
+the verdict parser with an invented classification, with a resolution claimed
+against zero tool calls, with unparseable text, and with malformed JSON. None of
+those tests needs a network connection or an API key.
+
+This is also why the suite runs in under a second and can be part of an ordinary
+development loop.
+
+**Verified by mutation.** Three deliberate bugs were introduced and each was
+caught: widening the fee tolerance until it absorbed a genuine overcharge,
+removing the amount check from the verification gate, and reverting failover to
+demote a whole provider on any failure. The last was caught by three tests
+independently, including one written specifically for the regression that
+prompted the redesign.
