@@ -295,8 +295,11 @@ You have query tools. Every number you report must come from a tool result. Do \
 not calculate, estimate, or infer figures yourself, and do not report a number \
 that no tool returned.
 
-You have at most {max_steps} tool calls. Answer in two or three sentences, in \
-plain language, citing the specific figures the tools returned.
+You have at most {max_steps} tool calls.
+
+Answer in at most four sentences of continuous prose. Do not use markdown, \
+bullet points, tables, or bold. Cite the specific figures the tools returned \
+inside the sentences.
 
 All amounts are Indian rupees and are returned prefixed with INR. Report them \
 that way.

@@ -110,6 +110,25 @@ def e(x) -> str:
     return html.escape(str(x))
 
 
+def plain(text: str) -> str:
+    """
+    Reduce a model's markdown to prose.
+
+    The Q&A answers are meant to be two or three sentences. Models reach for
+    bold and tables anyway, and escaping that verbatim renders as a wall of
+    asterisks and pipes. Rendering the markdown properly would mean shipping a
+    parser for untrusted model output, which is a worse trade than dropping the
+    formatting.
+    """
+    import re as _re
+    t = _re.sub(r"\*\*(.+?)\*\*", r"\1", text)          # bold
+    t = _re.sub(r"\|[-: |]+\|", " ", t)                   # table rules
+    t = t.replace("|", " · ")                            # table cells
+    t = _re.sub(r"\s*·\s*·\s*", " · ", t)
+    t = _re.sub(r"[ \t]{2,}", " ", t)
+    return t.strip(" ·")
+
+
 def load_traces(path: Path) -> list[dict]:
     """Agent traces are optional. A report without them is still complete;
     the deterministic result does not depend on the agent having run."""
@@ -342,7 +361,7 @@ def build(datadir: Path, outfile: Path, traces_path: Path | None = None,
                 f'{e(item["question"])}</span>'
                 f'<span class="verdict">{e(tools)}</span>'
                 f'</summary><div class="body">'
-                f'<div class="prose">{e(item["answer"])}</div>'
+                f'<div class="prose">{e(plain(item["answer"]))}</div>'
                 f'<div class="steps"><div class="step">'
                 f'<span class="tool">{e(tools)}</span>'
                 f'<span class="out">the query this answer rests on</span>'
