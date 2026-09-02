@@ -11,3 +11,5 @@ data_alt/
 report.html
 agent_traces.json
 __pycache__/
+agent_traces.json
+.eval/
