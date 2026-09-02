@@ -391,3 +391,19 @@ Amounts now leave the tools as "INR 1770.20". A unit is part of an amount, not
 decoration on it, and the boundary with a language model is exactly where an
 implicit convention stops being safe. Internal code keeps the bare string, which
 is correct there because every caller already knows the unit.
+
+---
+
+### 2026-09-02 - Three runs, three different degrees of compliance.
+
+The no-arithmetic rule for the Q&A agent has now been observed holding
+completely, partially, and not at all across three runs of the same five
+questions. Run one produced a combined total unprompted. Run two, with a
+tightened instruction, complied on one question and summed on another. Run
+three, with the instruction tightened again and the response format
+constrained, complied throughout.
+
+Nothing about the guarantee changed between those runs. A prompt-level rule is
+a probability, and the sample is now large enough to say so rather than suspect
+it. The resolution agent's guards have been observed failing zero times across
+every run, because they cannot fail: they are if-statements with tests.
