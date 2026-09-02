@@ -314,6 +314,70 @@ def run_throughput(sizes: list[int], workdir: Path) -> None:
     print()
 
 
+# --------------------------------------------------------------------------
+# Adversarial evaluation
+# --------------------------------------------------------------------------
+
+def run_stress(scales: list[float], orders: int, seeds: int,
+               workdir: Path, compound: bool = False) -> None:
+    """
+    Measure the engine as defect density rises.
+
+    A reported accuracy on a realistic batch says nothing about where the
+    system stops working. This raises the planted defect rate until it does,
+    which is a more useful number than a best case -- and it is the number that
+    tells an operator when to stop trusting the output.
+
+    Each density is run across several seeds, because a single batch at high
+    density is dominated by which defects happened to collide.
+    """
+    print("=" * 74)
+    print("ADVERSARIAL EVALUATION -- accuracy as defect density rises"
+          + ("  [compound]" if compound else ""))
+    print("=" * 74)
+    print()
+    print(f"  {'scale':>6}{'defect rate':>14}{'resolved':>12}"
+          f"{'accuracy':>12}{'exceptions':>13}{'worst seed':>13}")
+    print("-" * 74)
+
+    gen = Path(__file__).resolve().parent / "generate_data.py"
+
+    for scale in scales:
+        rates, accs, excs, densities = [], [], [], []
+        for seed in range(1, seeds + 1):
+            out = workdir / f"_stress_{scale}_{seed}"
+            subprocess.run(
+                [sys.executable, str(gen), "--seed", str(seed),
+                 "--orders", str(orders), "--defect-scale", str(scale),
+                 "--out", str(out)]
+                + (["--compound"] if compound else []),
+                check=True, capture_output=True)
+
+            truth = load_truth(out)
+            defective = sum(1 for v in truth.values() if v != "clean")
+            densities.append(defective / len(truth) if truth else 0)
+
+            _, summary = grade(out)
+            rates.append(summary["resolution_rate"])
+            accs.append(summary["accuracy"])
+            excs.append(summary["entities"] - summary["resolved"])
+
+        mean = lambda xs: sum(xs) / len(xs)
+        print(f"  {scale:>6.1f}{mean(densities):>13.0%}{mean(rates):>12.1%}"
+              f"{mean(accs):>12.1%}{mean(excs):>13.0f}{min(accs):>12.1%}")
+
+    print("-" * 74)
+    print()
+    print("  Resolution rate falls as density rises -- expected and correct:")
+    print("  more defects means more records a human must see.")
+    print()
+    print("  Accuracy is invariant to density alone, because each record is")
+    print("  classified independently. Density is not adversarial. Run with")
+    print("  --compound to allow several defects on one record, which is the")
+    print("  case that does degrade the result.")
+    print()
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--data", default="data")
@@ -321,13 +385,20 @@ def main() -> None:
                     help="run variance analysis across N seeds")
     ap.add_argument("--orders", type=int, default=120)
     ap.add_argument("--throughput", action="store_true")
+    ap.add_argument("--stress", action="store_true",
+                    help="measure accuracy as defect density rises")
+    ap.add_argument("--compound", action="store_true",
+                    help="allow several defects per record during stress")
     ap.add_argument("--workdir", default=".eval")
     args = ap.parse_args()
 
     workdir = Path(args.workdir)
     workdir.mkdir(exist_ok=True)
 
-    if args.seeds:
+    if args.stress:
+        run_stress([1.0, 2.0, 3.0, 4.0, 6.0], args.orders,
+                   args.seeds or 3, workdir, compound=args.compound)
+    elif args.seeds:
         run_variance(args.seeds, args.orders, workdir)
     elif args.throughput:
         run_throughput([120, 500, 1000, 5000], workdir)

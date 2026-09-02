@@ -146,6 +146,20 @@ class DefectPlan:
     missing_bank_row: int = 1
 
 
+def scaled_plan(scale: float) -> "DefectPlan":
+    """
+    Multiply every planted defect count by `scale`.
+
+    Defect density in the default batch is roughly 12%, which is realistic for
+    a merchant with reasonable systems. Raising it lets the engine be measured
+    where it degrades rather than only where it succeeds -- a reported best
+    case says nothing about the breaking point.
+    """
+    base = DefectPlan()
+    return DefectPlan(**{f: max(0, round(getattr(base, f) * scale))
+                         for f in base.__dataclass_fields__})
+
+
 @dataclass
 class Generator:
     seed: int = 42
@@ -154,6 +168,7 @@ class Generator:
     n_days: int = 12
     opening_balance_paise: int = rupees_to_paise("250000.00")
     plan: DefectPlan = field(default_factory=DefectPlan)
+    allow_compound: bool = False
 
     def __post_init__(self):
         self.rng = random.Random(self.seed)
@@ -245,7 +260,20 @@ class Generator:
         self.truth.append(TruthRow(eid, etype, cls, target, notes))
 
     def _pick_clean_orders(self, n: int, exclude: set[str]) -> list[LedgerRow]:
-        pool = [l for l in self.ledger if l.order_id not in exclude]
+        """
+        Choose orders to plant a defect on.
+
+        By default an order carries at most one defect, which keeps the answer
+        key unambiguous: each record has exactly one correct classification.
+
+        With `allow_compound`, defects may stack on the same order. This is the
+        genuinely adversarial case -- a fee mismatch on an order that is also
+        refunded, a duplicate where one capture is unsettled -- and it is where
+        a single-label taxonomy starts to break down, because the record now
+        has two correct answers and the engine can only report one.
+        """
+        pool = (list(self.ledger) if self.allow_compound
+                else [l for l in self.ledger if l.order_id not in exclude])
         return self.rng.sample(pool, min(n, len(pool)))
 
     def _gw_for(self, order_id: str) -> GatewayRow | None:
@@ -584,9 +612,16 @@ def main() -> None:
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--orders", type=int, default=120)
     ap.add_argument("--out", type=str, default="data")
+    ap.add_argument("--compound", action="store_true",
+                    help="allow several defects on one record (adversarial)")
+    ap.add_argument("--defect-scale", type=float, default=1.0,
+                    help="multiply every planted defect count (1.0 = default "
+                         "density of roughly 12%%)")
     args = ap.parse_args()
 
-    gen = Generator(seed=args.seed, n_orders=args.orders)
+    gen = Generator(seed=args.seed, n_orders=args.orders,
+                    plan=scaled_plan(args.defect_scale),
+                    allow_compound=args.compound)
     gen.run()
     gen.write(Path(args.out))
     print(gen.summary())

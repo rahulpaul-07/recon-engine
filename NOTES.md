@@ -267,3 +267,50 @@ when nothing had answered -- the chain pre-filled its active provider at
 construction instead of leaving it empty until a candidate succeeded. A summary
 line that names a model which never ran is exactly the kind of quiet
 misstatement this project is supposed to avoid.
+
+---
+
+### 2026-09-02 - The first stress test did not stress anything.
+
+Added a defect-density dial and ran the engine from the default rate up to a
+batch where every record carries a defect. Accuracy stayed at 100.0% throughout.
+
+That is not a good result, it is a sign the experiment was wrong. Raising
+density adds more defects but no new kinds. Each record is classified
+independently, so accuracy is invariant to how many defective records exist --
+the engine handles exactly the classes it was built for, at any volume. I had
+measured something that could not have come out differently.
+
+The genuinely adversarial case is defects that **interact**: two on the same
+record. A fee mismatch on an order that is also refunded; a duplicate where one
+capture is unsettled. The generator prevented this deliberately, with a `used`
+set ensuring one defect per order, because it keeps the answer key unambiguous.
+Removing that guard breaks the engine in a specific and informative way:
+
+    compound defects   accuracy
+      22% density        100.0%
+      37%                 98.6%
+      52%                 97.6%
+      62%                 95.7%
+      82%                 92.3%
+
+The failures are all one shape. ORD4111 carries both a fee mismatch and a
+refund. Tier 1 checks fees before refunds, so the engine reports `fee_mismatch`;
+the answer key recorded whichever defect was planted last, `refund`. Neither is
+wrong. The record genuinely has both conditions.
+
+So the limitation is in the **taxonomy**, not the matcher. A single-label
+classification cannot express a record with two simultaneous conditions, and at
+high compound density that becomes the dominant error mode. The fix would be to
+return a set of classifications per record rather than one, and to grade against
+set overlap rather than equality.
+
+Not making that change now. It touches the answer key, the matcher's return
+type, the evaluator and the report, and the honest version of this project is
+one that states the limitation and shows the curve rather than one that quietly
+widens the taxonomy at the end of a build. The measurement is more useful than
+the fix would have been.
+
+Worth recording that the first version of this experiment would have gone in the
+submission as "100% accuracy even when every record is defective", which is true,
+meaningless, and would not have survived one question.
