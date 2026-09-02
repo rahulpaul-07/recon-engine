@@ -9,7 +9,4 @@ venv/
 data_alt/
 *.log
 report.html
-agent_traces.json
-__pycache__/
-agent_traces.json
-.eval/
+qa_answers.json

@@ -41,8 +41,9 @@ python3 src/evaluate.py --data data
 python3 src/evaluate.py --seeds 12 --orders 150       # variance across batches
 python3 src/evaluate.py --throughput                  # scaling behaviour
 python3 src/investigate.py --data data --json agent_traces.json
-python3 src/report.py --data data --traces agent_traces.json --out report.html
-python3 src/ask.py --data data --demo                 # settlement Q&A
+python3 src/report.py --data data --traces agent_traces.json \
+                      --qa qa_answers.json --out report.html
+python3 src/ask.py --data data --demo --json qa_answers.json
 python3 -m pytest tests/ -q                           # 67 tests
 python3 src/evaluate.py --stress --compound --seeds 3 # where it breaks
 ```

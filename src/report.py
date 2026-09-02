@@ -122,9 +122,10 @@ def load_traces(path: Path) -> list[dict]:
         return []
 
 
-def build(datadir: Path, outfile: Path, traces_path: Path | None = None
-          ) -> None:
+def build(datadir: Path, outfile: Path, traces_path: Path | None = None,
+          qa_path: Path | None = None) -> None:
     traces = load_traces(traces_path) if traces_path else []
+    qa = load_traces(qa_path) if qa_path else []
     orders, txns, settlements, bank = load(datadir)
     resolutions = Engine(orders, txns, settlements, bank).run()
     metrics, summary = grade(datadir)
@@ -322,6 +323,42 @@ def build(datadir: Path, outfile: Path, traces_path: Path | None = None
                              f'{e(t["analyst_note"])}</div>')
             parts.append('</div></details>')
 
+    # ---- settlement Q&A (optional) --------------------------------------
+    if qa:
+        answered = [q for q in qa if not q.get("error")]
+        parts.append(
+            '<h2>Settlement Q&amp;A</h2>'
+            '<div class="sub">Plain-English questions about the batch. The '
+            'model translates the question into a structured query and '
+            'explains the result; it does not compute the figures. Every '
+            'number below came from the query named beneath each answer.'
+            '</div>')
+
+        for item in answered:
+            tools = ", ".join(item.get("tools_used") or []) or "no query"
+            parts.append(
+                f'<details><summary>'
+                f'<span class="id" style="min-width:0">'
+                f'{e(item["question"])}</span>'
+                f'<span class="verdict">{e(tools)}</span>'
+                f'</summary><div class="body">'
+                f'<div class="prose">{e(item["answer"])}</div>'
+                f'<div class="steps"><div class="step">'
+                f'<span class="tool">{e(tools)}</span>'
+                f'<span class="out">the query this answer rests on</span>'
+                f'</div></div></div></details>')
+
+        parts.append(
+            '<div class="caveat"><strong>A weaker guarantee than the '
+            'resolution agent.</strong> Every figure here came from a query '
+            'result, but the rule against combining figures lives in the '
+            'prompt rather than in code. On one run the model added two '
+            'results together and reported the sum -- correctly, which is '
+            'worse than incorrectly, because a right answer produced by a '
+            'forbidden route looks identical to a grounded one. The '
+            'resolution agent\'s constraints are enforced in code and tested '
+            'without a model; these are not.</div>')
+
     parts.append(
         f'<footer>Generated from {datadir}. '
         f'Reconciles a merchant ledger against a payment gateway report and '
@@ -337,8 +374,10 @@ def main() -> None:
     ap.add_argument("--out", default="report.html")
     ap.add_argument("--traces", default="agent_traces.json",
                     help="agent trace JSON; omitted silently if absent")
+    ap.add_argument("--qa", default="qa_answers.json",
+                    help="Q&A answer JSON; omitted silently if absent")
     args = ap.parse_args()
-    build(Path(args.data), Path(args.out), Path(args.traces))
+    build(Path(args.data), Path(args.out), Path(args.traces), Path(args.qa))
     print(f"wrote {args.out}")
 
 
