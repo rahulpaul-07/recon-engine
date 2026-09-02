@@ -10,3 +10,6 @@ data_alt/
 *.log
 report.html
 qa_answers.json
+
+agent_traces.json
+.eval/
