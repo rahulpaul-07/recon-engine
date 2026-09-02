@@ -314,3 +314,80 @@ the fix would have been.
 Worth recording that the first version of this experiment would have gone in the
 submission as "100% accuracy even when every record is defective", which is true,
 meaningless, and would not have survived one question.
+
+---
+
+### 2026-09-02 - The Q&A layer reported a 1.85% MDR on zero-MDR UPI.
+
+Built aggregate query tools for the Q&A agent and checked each one by calling
+it directly, before involving a model. `fee_summary` reported an effective rate
+of 1.85% on UPI. UPI is zero-MDR. The figure had to be wrong.
+
+It was summing every fee field on every money-moving row, which folds three
+chargeback penalties of Rs 590 each into the same total as merchant discount
+rate. UPI's Rs 1,182.27 was Rs 2.27 of real MDR -- from the deliberately
+planted fee-mismatch defects -- plus Rs 1,180 of chargeback penalties.
+
+The denominator was wrong too: gross across all row types includes refunds and
+chargebacks, which are negative, so the rate was distorted in both directions
+at once.
+
+Now MDR and chargeback penalties are reported as separate figures and never
+combined into a rate, and the denominator is payment gross only. UPI reads
+0.00%, card 2.37%, wallet 2.12%, netbanking 2.82% -- the last being higher
+because a flat Rs 12 on small orders is proportionally expensive, which is how
+a flat fee behaves.
+
+The lesson is not about fees. It is that an aggregate is a place where two
+different things get added together and the result still looks like a number.
+The record-level checks in this project all have a natural falsifier -- the
+answer key -- and the aggregates do not. This one was caught because UPI has a
+rate I knew should be zero. An aggregate over a field I had no prior expectation
+for would have shipped wrong.
+
+Worth remembering that the Q&A agent would have reported that 1.85% in fluent
+English with a tool result to cite, and it would have been entirely convincing.
+Grounding an answer in a tool result guarantees the number came from the data.
+It does not guarantee the tool computed the right thing.
+
+---
+
+### 2026-09-02 - The Q&A agent did arithmetic it was told not to, and got it right.
+
+First live run of the Q&A agent. Every figure it reported traced back to a tool
+result, except one. Asked about refunds and chargebacks, it answered:
+
+    "between the reversed transactions and chargeback penalties, you lost
+     roughly 25,216.49 to these disputes"
+
+No tool returned that. It added the refund total to the penalty total itself.
+The sum is correct, which is worse than if it had been wrong -- a wrong number
+would have been obvious, and a right one produced by a forbidden route is
+indistinguishable from a grounded figure until you go looking.
+
+The cause is mine. The resolution agent's constraints are enforced in code: an
+invented classification is downgraded, a resolution with no tool call is
+overruled, and both are tested without a model. For the Q&A agent I put "do not
+calculate figures yourself" in the prompt and stopped there. A rule in a prompt
+is a request, not a constraint, and this is a live example of the distinction in
+my own project after arguing the point elsewhere in this file.
+
+Tightened the instruction to require naming the figures rather than combining
+them, which is a mitigation, not a fix. The real fix is a tool that returns
+combined totals so no addition is ever needed, or a post-check that every number
+in the answer appears in a tool result. Recorded rather than built, because the
+honest position is that this layer has a weaker guarantee than the resolution
+agent and the difference is worth stating.
+
+---
+
+### 2026-09-02 - Every amount was reported in dollars.
+
+The same run rendered every figure as US dollars. The query tools returned bare
+decimal strings -- "1770.20" -- and the model supplied a currency symbol from
+nowhere. On a project about Indian payments, with UPI and GST throughout.
+
+Amounts now leave the tools as "INR 1770.20". A unit is part of an amount, not
+decoration on it, and the boundary with a language model is exactly where an
+implicit convention stops being safe. Internal code keeps the bare string, which
+is correct there because every caller already knows the unit.
