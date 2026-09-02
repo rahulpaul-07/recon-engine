@@ -64,6 +64,35 @@ td.num,th.num{text-align:right}
         border-radius:0 6px 6px 0;margin-top:18px;font-size:13.5px;color:#b8b3ad}
 footer{margin-top:52px;padding-top:18px;border-top:1px solid #1f1f1f;
        color:#5f5a55;font-size:12px}
+details{background:#141414;border:1px solid #242424;border-radius:8px;
+        margin-bottom:10px;overflow:hidden}
+details[open]{border-color:#303030}
+summary{padding:13px 18px;cursor:pointer;list-style:none;display:flex;
+        align-items:center;gap:12px;font-size:13.5px}
+summary::-webkit-details-marker{display:none}
+summary::before{content:"";display:inline-block;flex:none;
+                width:0;height:0;border-left:5px solid #6f6a64;
+                border-top:4px solid transparent;
+                border-bottom:4px solid transparent;
+                transition:transform .15s}
+details[open] summary::before{transform:rotate(90deg)}
+summary .id{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;
+            color:#d8d4cf;min-width:172px}
+summary .verdict{margin-left:auto;color:#8b8680;font-size:12px}
+.body{padding:2px 18px 18px 42px;border-top:1px solid #1c1c1c}
+.steps{margin:14px 0 16px;border-left:1px solid #2a2a2a;padding-left:16px}
+.step{display:flex;gap:10px;padding:5px 0;font-size:12.5px;align-items:baseline}
+.step .n{color:#5f5a55;min-width:16px;font-variant-numeric:tabular-nums}
+.step .tool{font-family:ui-monospace,Menlo,Consolas,monospace;color:#8fa8c7;
+            min-width:236px}
+.step .out{color:#918c86}
+.step.neg .out{color:#c79a86}
+.prose{font-size:13.5px;color:#c2bdb7;margin:10px 0}
+.prose .lab{display:block;font-size:11px;text-transform:uppercase;
+            letter-spacing:.07em;color:#7a756f;margin-bottom:5px}
+.note{background:#131313;border-left:2px solid #4a4a4a;padding:11px 15px;
+      border-radius:0 5px 5px 0;font-size:13px;color:#aaa5a0;margin-top:12px}
+.disagree{border-left:2px solid #d9a441}
 """
 
 # Classes that mean money is genuinely missing or unaccounted for, as opposed
@@ -80,7 +109,21 @@ def e(x) -> str:
     return html.escape(str(x))
 
 
-def build(datadir: Path, outfile: Path) -> None:
+def load_traces(path: Path) -> list[dict]:
+    """Agent traces are optional. A report without them is still complete;
+    the deterministic result does not depend on the agent having run."""
+    if not path.exists():
+        return []
+    try:
+        import json
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception:                                     # noqa: BLE001
+        return []
+
+
+def build(datadir: Path, outfile: Path, traces_path: Path | None = None
+          ) -> None:
+    traces = load_traces(traces_path) if traces_path else []
     orders, txns, settlements, bank = load(datadir)
     resolutions = Engine(orders, txns, settlements, bank).run()
     metrics, summary = grade(datadir)
@@ -172,14 +215,110 @@ def build(datadir: Path, outfile: Path) -> None:
                  'rate.</div>'
                  '<table><tr><th>Record</th><th>Type</th><th>Classification</th>'
                  '<th>Reason</th></tr>')
+    by_id = {t["entity_id"]: t for t in traces}
     for r in sorted(exceptions, key=lambda x: x.classification):
         cls = "break" if r.classification in REAL_BREAKS else ""
+        extra = ""
+        tr = by_id.get(r.entity_id)
+        if tr and not tr.get("agreed"):
+            extra = (f' <span class="tag break">agent said '
+                     f'{e(tr["agent_classification"])}</span>')
         parts.append(
             f'<tr><td class="mono">{e(r.entity_id)}</td>'
             f'<td class="reason">{e(r.entity_type)}</td>'
-            f'<td><span class="tag {cls}">{e(r.classification)}</span></td>'
+            f'<td><span class="tag {cls}">{e(r.classification)}</span>{extra}</td>'
             f'<td class="reason">{e(r.detail)}</td></tr>')
     parts.append('</table>')
+
+    # ---- agent investigations (optional) --------------------------------
+    if traces:
+        agreed = sum(1 for t in traces if t.get("agreed"))
+        calls = sum(t.get("model_calls", 0) for t in traces)
+        secs = sum(t.get("seconds", 0) for t in traces)
+        tool_counts: dict[str, int] = {}
+        for t in traces:
+            for st in t.get("steps", []):
+                tool_counts[st["tool"]] = tool_counts.get(st["tool"], 0) + 1
+
+        parts.append(
+            f'<h2>Agent investigation of the exceptions</h2>'
+            f'<div class="sub">Each unresolved record is passed to a bounded '
+            f'agent that selects its own investigation tools. The agent never '
+            f'computes a result: every value below came from deterministic '
+            f'code the model cannot influence. It contributes the '
+            f'investigative path, not the arithmetic.</div>'
+            f'<div class="cards">'
+            f'<div class="card"><div class="label">Investigated</div>'
+            f'<div class="value">{len(traces)}</div>'
+            f'<div class="note">{calls} model calls</div></div>'
+            f'<div class="card green"><div class="label">Agreed with matcher</div>'
+            f'<div class="value">{agreed}/{len(traces)}</div>'
+            f'<div class="note">independently, without being told</div></div>'
+            f'<div class="card"><div class="label">Tool calls</div>'
+            f'<div class="value">{sum(tool_counts.values())}</div>'
+            f'<div class="note">{len(tool_counts)} distinct tools used</div></div>'
+            f'<div class="card"><div class="label">Wall clock</div>'
+            f'<div class="value">{secs:.0f}s</div>'
+            f'<div class="note">{secs/len(traces):.0f}s per record</div></div>'
+            f'</div>')
+
+        parts.append('<h2>Tools the agent chose to call</h2>'
+                     '<div class="sub">Unprompted. No ordering or preference '
+                     'was specified.</div><table>'
+                     '<tr><th>Tool</th><th class="num">Calls</th></tr>')
+        for name, n in sorted(tool_counts.items(), key=lambda kv: -kv[1]):
+            parts.append(f'<tr><td class="mono">{e(name)}</td>'
+                         f'<td class="num">{n}</td></tr>')
+        parts.append('</table>')
+
+        parts.append('<h2>Investigation traces</h2>'
+                     '<div class="sub">Every step, in the order the agent '
+                     'chose it. Expand a record to see what it did.</div>')
+
+        for t in traces:
+            agreed_one = t.get("agreed")
+            cls = "" if agreed_one else "disagree"
+            badge = "" if agreed_one else (
+                f'<span class="tag break">disagreed</span>')
+            parts.append(
+                f'<details class="{cls}"><summary>'
+                f'<span class="id">{e(t["entity_id"])}</span>'
+                f'<span class="tag">{e(t["agent_classification"])}</span>'
+                f'{badge}'
+                f'<span class="verdict">{len(t.get("steps", []))} tool calls '
+                f'&middot; {t.get("seconds", 0):.0f}s</span>'
+                f'</summary><div class="body">')
+
+            if not agreed_one:
+                parts.append(
+                    f'<div class="note disagree">'
+                    f'<strong>The agent disagreed with the matcher.</strong> '
+                    f'The deterministic engine classified this record '
+                    f'<span class="mono">{e(t["matcher_classification"])}</span>; '
+                    f'after its own investigation the agent concluded '
+                    f'<span class="mono">{e(t["agent_classification"])}</span>. '
+                    f'Both are recorded. Neither overrides the other -- the '
+                    f'agent investigates independently and is not shown the '
+                    f'engine\'s verdict as a fact.</div>')
+
+            parts.append('<div class="steps">')
+            for st in t.get("steps", []):
+                args = ", ".join(f"{k}={v}" for k, v in
+                                 (st.get("tool_input") or {}).items())
+                neg = "" if st.get("ok") else " neg"
+                parts.append(
+                    f'<div class="step{neg}"><span class="n">{st.get("n","")}</span>'
+                    f'<span class="tool">{e(st["tool"])}({e(args)})</span>'
+                    f'<span class="out">{e(st.get("summary",""))}</span></div>')
+            parts.append('</div>')
+
+            if t.get("reasoning"):
+                parts.append(f'<div class="prose"><span class="lab">Conclusion'
+                             f'</span>{e(t["reasoning"])}</div>')
+            if t.get("analyst_note"):
+                parts.append(f'<div class="note"><strong>For the analyst.</strong> '
+                             f'{e(t["analyst_note"])}</div>')
+            parts.append('</div></details>')
 
     parts.append(
         f'<footer>Generated from {datadir}. '
@@ -194,8 +333,10 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--data", default="data")
     ap.add_argument("--out", default="report.html")
+    ap.add_argument("--traces", default="agent_traces.json",
+                    help="agent trace JSON; omitted silently if absent")
     args = ap.parse_args()
-    build(Path(args.data), Path(args.out))
+    build(Path(args.data), Path(args.out), Path(args.traces))
     print(f"wrote {args.out}")
 
 
