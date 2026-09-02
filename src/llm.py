@@ -556,10 +556,6 @@ class FallbackChain(Provider):
     def candidates(self) -> list[tuple[str, str]]:
         return [(p.name, m) for p in self.providers for m in p.candidates]
 
-    @property
-    def chain_names(self) -> list[str]:
-        return [f"{p.name}:{p.candidates[0]}" for p in self.providers]
-
     def complete(self, system, messages, tools=None, max_tokens=1024,
                  model: str | None = None):
         last = None

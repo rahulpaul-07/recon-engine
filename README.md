@@ -20,6 +20,8 @@ reads.
 | Batch | 120 orders, 141 reconcilable entities |
 | Resolved | **90.8%** (95% CI 84.9-94.5%) |
 | Classification accuracy | **100.0%** across 14 classes |
+| Under compound defects | degrades to 92.3% at 82% defect density |
+| Tests | 67, verified by mutation |
 | Across 12 independent batches | 92.7% +/- 0.4% resolved, 100.0% +/- 0.0% accuracy |
 | Throughput | ~233,000 entities/sec, flat from 141 to 5,022 |
 | Exceptions | 13, each listed with a reason. None dropped. |
@@ -40,6 +42,9 @@ python3 src/evaluate.py --seeds 12 --orders 150       # variance across batches
 python3 src/evaluate.py --throughput                  # scaling behaviour
 python3 src/investigate.py --data data --json agent_traces.json
 python3 src/report.py --data data --traces agent_traces.json --out report.html
+python3 src/ask.py --data data --demo                 # settlement Q&A
+python3 -m pytest tests/ -q                           # 67 tests
+python3 src/evaluate.py --stress --compound --seeds 3 # where it breaks
 ```
 
 Only `investigate.py` needs a language model. Everything else is deterministic
@@ -78,7 +83,7 @@ ledger.csv   gateway.csv   settlements.csv   bank.csv
                      unresolved records
                               |
                          agent loop
-        8 investigation tools, max 5 model rounds
+        9 investigation tools, max 5 model rounds
         7 providers / 20 candidates, scoped failover
                               |
                      verification gate
@@ -144,6 +149,48 @@ caused the original chain to discard an otherwise working provider. Model
 identifiers are a dependency on a vendor's catalogue at a point in time, and
 vendors retire models.
 
+## Where it breaks
+
+Raising defect density alone does not degrade accuracy: each record is
+classified independently, so more defects of the same kinds change nothing. That
+first stress test returned 100% at every density, which was a sign the
+experiment was wrong rather than a good result.
+
+Defects that *interact* do degrade it. Allowing several defects on one record:
+
+| Compound defect density | Classification accuracy |
+|---|---|
+| 22% | 100.0% |
+| 37% | 98.6% |
+| 52% | 97.6% |
+| 62% | 95.7% |
+| 82% | 92.3% |
+
+Every failure has the same shape. An order carrying both a fee mismatch and a
+refund is reported as one or the other, because the taxonomy allows a single
+label per record. Neither answer is wrong; the record genuinely has both
+conditions. The limitation is in the classification scheme, not the matcher, and
+the fix would be to return a set of labels and grade against set overlap.
+
+Recorded rather than fixed. It touches the answer key, the matcher's return
+type, the evaluator and the report, and stating a known limitation is worth more
+than widening a taxonomy on the last day of a build.
+
+## Two layers, two strengths of guarantee
+
+The resolution agent's constraints are enforced in code: an invented
+classification is downgraded, a resolution claimed without a tool call is
+overruled, and both are tested without a model in the loop.
+
+The Q&A agent's are not. Asked to summarise refunds and chargebacks, it once
+added two tool results together and reported the sum -- correctly, which is
+worse than incorrectly, because a right answer produced by a forbidden route is
+indistinguishable from a grounded one. That rule lived in the prompt, and a rule
+in a prompt is a request rather than a constraint.
+
+The distinction is stated rather than hidden. `NOTES.md` records what the fix
+would be.
+
 ## Domain rules encoded
 
 - Money is integer paise throughout. Floats are never used for currency.
@@ -173,9 +220,10 @@ src/generate_data.py  synthetic batch + ground-truth answer key
 src/matcher.py        tiered reconciliation engine
 src/narration.py      reference recovery with verification gate
 src/llm.py            provider-agnostic model interface with failover
-src/tools.py          8 deterministic investigation tools
+src/tools.py          9 deterministic investigation tools
 src/agent.py          bounded exception resolution agent
 src/investigate.py    runs the agent over unresolved records
+src/ask.py            settlement Q&A over aggregate queries
 src/evaluate.py       grading, Wilson intervals, variance, throughput
 src/report.py         self-contained HTML report
 ```

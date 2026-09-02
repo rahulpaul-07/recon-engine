@@ -301,6 +301,16 @@ TOOL_SCHEMA = [
             "required": ["amount_paise"]},
     },
     {
+        "name": "search_transactions_by_amount",
+        "description": "Find individual gateway transactions near an amount. "
+                       "Use when a record has no order reference and you need "
+                       "to see whether a matching payment exists at all.",
+        "input_schema": {"type": "object", "properties": {
+            "amount_paise": {"type": "integer"},
+            "tolerance_paise": {"type": "integer"}},
+            "required": ["amount_paise"]},
+    },
+    {
         "name": "find_subset_summing_to",
         "description": "Determine which individual transactions compose a lump "
                        "amount. Use when a bank credit matches no single "
@@ -353,6 +363,7 @@ def build_dispatch(tools: InvestigationTools) -> dict[str, Callable]:
         "get_order": tools.get_order,
         "find_related_transactions": tools.find_related_transactions,
         "search_settlements_by_amount": tools.search_settlements_by_amount,
+        "search_transactions_by_amount": tools.search_transactions_by_amount,
         "find_subset_summing_to": tools.find_subset_summing_to,
         "check_balance_continuity": tools.check_balance_continuity,
         "check_fee_against_rule": tools.check_fee_against_rule,
