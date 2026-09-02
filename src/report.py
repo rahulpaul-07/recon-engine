@@ -54,7 +54,8 @@ tr:last-child td{border-bottom:none}
 td.num,th.num{text-align:right}
 .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:12.5px}
 .tag{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11.5px;
-     font-weight:500;background:#232323;color:#b8b3ad}
+     font-weight:500;background:#232323;color:#b8b3ad;white-space:nowrap}
+.tag + .tag{margin-left:7px}
 .tag.break{background:#3a2020;color:#e08c7a}
 .tag.ok{background:#1e2a1a;color:#8fc275}
 .bar{height:5px;background:#1c1c1c;border-radius:3px;overflow:hidden;margin-top:7px}
@@ -221,7 +222,7 @@ def build(datadir: Path, outfile: Path, traces_path: Path | None = None
         extra = ""
         tr = by_id.get(r.entity_id)
         if tr and not tr.get("agreed"):
-            extra = (f' <span class="tag break">agent said '
+            extra = (f'<span class="tag break">agent: '
                      f'{e(tr["agent_classification"])}</span>')
         parts.append(
             f'<tr><td class="mono">{e(r.entity_id)}</td>'
@@ -256,7 +257,8 @@ def build(datadir: Path, outfile: Path, traces_path: Path | None = None
             f'<div class="note">independently, without being told</div></div>'
             f'<div class="card"><div class="label">Tool calls</div>'
             f'<div class="value">{sum(tool_counts.values())}</div>'
-            f'<div class="note">{len(tool_counts)} distinct tools used</div></div>'
+            f'<div class="note">{len(tool_counts)} distinct tools, across '
+            f'{calls} model rounds</div></div>'
             f'<div class="card"><div class="label">Wall clock</div>'
             f'<div class="value">{secs:.0f}s</div>'
             f'<div class="note">{secs/len(traces):.0f}s per record</div></div>'
