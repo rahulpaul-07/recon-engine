@@ -291,7 +291,11 @@ src/evaluate.py       grading, Wilson intervals, variance, throughput
 src/report.py         self-contained HTML report
 ```
 
-`DECISIONS.md` - design decisions, each with the alternative that was rejected.
-`NOTES.md` - running log of what broke during the build and how it was resolved,
-including a case where the agent's investigation exposed a weakness in the
+`ARCHITECTURE.md` - how the system is built and why each part is shaped that way,
+including a section on what it deliberately does not do.
+
+`DECISIONS.md` - fourteen design decisions, each with the alternative rejected.
+`NOTES.md` - sixteen entries logging what broke during the build and how each was
+resolved, written as they happened rather than reconstructed afterwards.
+Includes the case where the agent's investigation exposed a weakness in the
 answer key itself.

@@ -1,6 +1,35 @@
 # What broke, and what I did about it
 
-Running log. Entries added as things actually break, not reconstructed later.
+Running log, written as things broke rather than reconstructed
+afterwards. Entries are in the order they happened.
+
+## What is in here
+
+- **2026-08-31** — Verifier flagged 6 "missing" settlements. Five were my checker, not the data.
+- **2026-08-31** — `gross - fee - gst != net` on 7 rows; I only planted 2.
+- **2026-08-31** — Refactor dropped a constant the generator still needed.
+- **2026-08-31** — Settlement report was missing entirely.
+- **2026-08-31** — The verification gate caught something I did not expect it to.
+- **2026-09-01** — Grading exposed an entity-identity mismatch, then a real bug.
+- **2026-09-01** — A perfect score on one seed hid a real defect.
+- **2026-09-01** — Fixed the balance-gap precedence bug.
+- **2026-09-02** — First live agent run: both providers failed, and the chain held.
+- **2026-09-02** — The agent disagreed with my answer key, and it was right to.
+- **2026-09-02** — Two display bugs in the trace output.
+- **2026-09-02** — The first stress test did not stress anything.
+- **2026-09-02** — The Q&A layer reported a 1.85% MDR on zero-MDR UPI.
+- **2026-09-02** — The Q&A agent did arithmetic it was told not to, and got it right.
+- **2026-09-02** — Every amount was reported in dollars.
+- **2026-09-03** — Optimal assignment never beat greedy on real data.
+
+The entries worth reading first, if reading only three:
+
+1. *The verification gate caught something I did not expect it to* —
+   the gate was built for the language model and first caught a regex result.
+2. *The agent disagreed with my answer key, and it was right to* —
+   the agent found a weakness in my own ground truth.
+3. *The first stress test did not stress anything* —
+   a 100% result that was a sign the experiment was wrong.
 
 ---
 
@@ -424,22 +453,3 @@ difference between knowing the ordinary path is safe and assuming it.
 Recording this because the tempting version of this entry is "added optimal
 assignment for ambiguous matches", which is true, sounds better, and implies an
 improvement that fifteen trials say does not exist.
-
----
-
-### 2026-09-03 - The answer key and the engine started measuring different things.
-
-Adding optimal assignment dropped accuracy on the ambiguous batch to 98.5%.
-Two records expected `ambiguous_match` and were reported `clean`.
-
-The engine is right. The generator plants ambiguity and records that as the
-expected classification, which was correct while ambiguity was unresolvable.
-The moment a solver could resolve it, the key was recording a condition -- this
-record was constructed to be ambiguous -- rather than an outcome -- the engine
-should fail to resolve this. Those are different claims and they diverged
-silently.
-
-Same shape as the compound-defect finding: an answer key encodes assumptions
-about the engine, so changing the engine can invalidate the key without
-touching the data. Worth knowing that a ground-truth file is not automatically
-neutral just because the engine never reads it.

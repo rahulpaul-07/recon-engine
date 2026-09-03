@@ -4,7 +4,25 @@ Each entry records what was chosen, why, and what was rejected. Rejected
 alternatives are recorded deliberately — a decision without an alternative
 isn't a decision.
 
+## Index
+
+D1. Python, not C++
+D2. Money is integer paise, never float
+D3. Fees are method-dependent, not a flat percentage
+D4. Refunds and chargebacks are negative signed amounts
+D5. `net_amount_paise` is redundant on purpose
+D6. `settlement_id` is nullable, and null is not an error
+D7. Bank narration is deliberately messy
+D8. The running balance column is a detector, not decoration
+D9. The language model provider is swappable, and "none" is a valid choice
+D10. Provider failover is per call, and a failed provider is demoted
+D11. Failover walks provider AND model, and demotion is scoped by failure kind
+D12. Agent constraints are enforced in code so that they are testable
+D13. Contested matches are solved jointly, not sequentially
+D14. Agreement with the agent is reported as kappa, not a percentage
+
 ---
+
 
 ## D1 — Python, not C++
 
@@ -239,3 +257,51 @@ removing the amount check from the verification gate, and reverting failover to
 demote a whole provider on any failure. The last was caught by three tests
 independently, including one written specifically for the regression that
 prompted the redesign.
+
+---
+
+## D13 - Contested matches are solved jointly, not sequentially
+
+**Chosen:** where several bank rows and several settlements are mutually
+plausible, defer them and solve the whole set at once with the Hungarian
+algorithm. Implemented directly rather than taken from scipy.
+
+**Why:** matching one row at a time commits to the best pair it sees first,
+which can consume a settlement a later row needed more. The error is not in any
+individual decision, it is in deciding sequentially at all.
+
+**Why implemented rather than imported:** the deterministic path has no
+third-party runtime dependency, and adding one for a function that runs on a
+handful of rows is a poor trade. Verified against brute force on 300 random
+matrices.
+
+**Cost function.** Amount difference weighted 1000x against date drift 1x, and
+a non-tying amount is inadmissible rather than expensive. Settlement dates move
+for mundane reasons -- a bank holiday, a late file -- while amounts do not.
+Weighting them equally would let a large amount error be excused by a good
+date, which is exactly the wrong trade in reconciliation.
+
+**Rejected:** leaving ambiguity unresolved. Escalating is safe but gives up
+information the data contains.
+
+**Measured honestly.** Across fifteen contested sets, optimal was never better
+than greedy, because the planted ambiguity makes settlements share an exact
+amount and window so every pairing costs the same. It is a guarantee that
+greedy cannot do worse, not a measured improvement. Kept because in a payments
+system the failure mode is a silently wrong match rather than a visible error.
+
+---
+
+## D14 - Agreement with the agent is reported as kappa, not a percentage
+
+**Chosen:** report Cohen's kappa alongside the raw agreement figure between the
+deterministic engine and the agent.
+
+**Why:** "agreed on 12 of 13" is true and slightly generous. Two classifiers
+drawing from the same small label set agree on some records by coincidence, and
+a raw percentage counts those as successes. Kappa subtracts the agreement
+chance alone would produce: 92.3% raw becomes 0.90.
+
+**Stated with its own caveat.** On thirteen records kappa is an unstable
+estimate and should be read as an indication rather than a measurement. A
+confident kappa on a sample this size would be its own kind of overclaiming.
