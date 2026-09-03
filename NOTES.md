@@ -394,16 +394,33 @@ is correct there because every caller already knows the unit.
 
 ---
 
-### 2026-09-02 - Three runs, three different degrees of compliance.
+### 2026-09-03 - Optimal assignment never beat greedy on real data.
 
-The no-arithmetic rule for the Q&A agent has now been observed holding
-completely, partially, and not at all across three runs of the same five
-questions. Run one produced a combined total unprompted. Run two, with a
-tightened instruction, complied on one question and summed on another. Run
-three, with the instruction tightened again and the response format
-constrained, complied throughout.
+Implemented the Hungarian algorithm for the case where several bank rows and
+several settlements are mutually plausible. Verified against brute force: 300
+random matrices, all exact. Built a unit case where greedy strands a row and
+optimal does not.
 
-Nothing about the guarantee changed between those runs. A prompt-level rule is
-a probability, and the sample is now large enough to say so rather than suspect
-it. The resolution agent's guards have been observed failing zero times across
-every run, because they cannot fail: they are if-statements with tests.
+Then measured it on generated data across fifteen contested sets. Optimal was
+strictly better zero times. Greedy stranded zero rows.
+
+The reason is structural rather than lucky. My planted ambiguity makes two
+settlements share an *exact* amount and the *same* payout window, so every
+pairing costs zero and the candidates are genuinely interchangeable. Any
+assignment is optimal, and greedy finds one immediately. The cases where optimal
+wins need asymmetric costs -- one row strongly preferring a settlement another
+row can only just use -- and that shape does not arise here.
+
+So the honest claim is narrower than the one I would have liked to make. The
+algorithm is a **guarantee, not an improvement**: it cannot do worse than
+greedy, and greedy's failure mode is real and demonstrated in a test, but on
+this data it does not occur.
+
+Kept it, for two reasons. The guarantee is worth having in a financial system
+where the failure mode is a silently wrong match rather than a visible error.
+And measuring that it changes nothing is itself the useful result -- it is the
+difference between knowing the ordinary path is safe and assuming it.
+
+Recording this because the tempting version of this entry is "added optimal
+assignment for ambiguous matches", which is true, sounds better, and implies an
+improvement that fifteen trials say does not exist.

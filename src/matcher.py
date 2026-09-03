@@ -27,6 +27,7 @@ from itertools import combinations
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from assignment import IMPOSSIBLE, assign  # noqa: E402
 from core import (  # noqa: E402
     FEE_TOLERANCE_PAISE, MONEY_MOVING_STATUSES, NON_SETTLING_STATUSES,
     expected_fee, paise_to_rupees_str, working_day_window,
@@ -397,6 +398,8 @@ class Engine:
         # Tier 2: no usable UTR. Infer from amount and a working-day window.
         # An exact amount match inside the plausible payout window is strong
         # evidence; anything ambiguous is escalated rather than guessed.
+        contested: list = []
+
         for row in deferred:
             candidates = []
             for s in self.settlements:
@@ -418,13 +421,10 @@ class Engine:
                     detail=("no usable UTR; unique amount match inside the "
                             "T+1..T+3 working-day window"))
             elif len(candidates) > 1:
-                self._emit(
-                    entity_id=row.bank_txn_id, entity_type="bank_row",
-                    classification="ambiguous_match", tier=2,
-                    matched_to=",".join(c.settlement_id for c in candidates),
-                    detail=(f"{len(candidates)} settlements share this amount "
-                            f"and date window; refusing to guess"),
-                    resolved=False)
+                # Defer: several rows may be competing for the same
+                # settlements, and deciding one at a time is what produces the
+                # avoidable mismatch. Collect them and solve jointly below.
+                contested.append((row, candidates))
             else:
                 self._emit(
                     entity_id=row.bank_txn_id, entity_type="bank_row",
@@ -432,6 +432,40 @@ class Engine:
                     detail=(f"{paise_to_rupees_str(row.movement_paise)} on "
                             f"{row.value_date} corresponds to no settlement"),
                     resolved=False)
+
+        # ---- Tier 2b: joint assignment for the contested rows -------------
+        # Greedy matching commits to the best pair it sees first, which can
+        # consume a settlement a later row needed more. Solving the whole
+        # contested set at once avoids that. The result is still verified: a
+        # pairing that is optimal but does not tie exactly is discarded.
+        if contested:
+            rows = [r for r, _ in contested]
+            pool = []
+            for _, cands in contested:
+                for c in cands:
+                    if c not in pool and c.settlement_id not in claimed:
+                        pool.append(c)
+
+            for pairing in assign(rows, pool):
+                row = rows[pairing.row_index]
+                if not pairing.admissible or pairing.settlement_index < 0:
+                    self._emit(
+                        entity_id=row.bank_txn_id, entity_type="bank_row",
+                        classification="ambiguous_match", tier=2,
+                        detail=(f"contested with {len(rows) - 1} other row(s); "
+                                f"no admissible pairing ({pairing.reason})"),
+                        resolved=False)
+                    continue
+
+                s_match = pool[pairing.settlement_index]
+                claimed.add(s_match.settlement_id)
+                self._emit(
+                    entity_id=row.bank_txn_id, entity_type="bank_row",
+                    classification="clean", tier=2,
+                    matched_to=s_match.settlement_id,
+                    detail=(f"contested with {len(rows) - 1} other row(s) for "
+                            f"{len(pool)} settlement(s); resolved by optimal "
+                            f"assignment ({pairing.reason})"))
 
         # Settlements that were reported but never appeared on the statement.
         for s in self.settlements:

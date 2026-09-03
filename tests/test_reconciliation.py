@@ -372,3 +372,78 @@ class TestFailover:
         chain = FallbackChain([_Stub("a", ["m"], {"m": "404 gone"})])
         chain.complete("s", [{"role": "user", "content": "x"}])
         assert chain.active is None
+
+
+# --------------------------------------------------------------------------
+# Optimal assignment
+# --------------------------------------------------------------------------
+
+from assignment import (  # noqa: E402
+    IMPOSSIBLE, greedy, hungarian, pair_cost, total_cost,
+)
+
+
+class TestAssignment:
+    """
+    The solver is verified against brute force rather than against expected
+    outputs. An assignment algorithm has a checkable definition of correct --
+    the minimum over all permutations -- so there is no reason to assert
+    anything weaker.
+    """
+
+    @pytest.mark.parametrize("seed", range(12))
+    def test_matches_brute_force_on_square_matrices(self, seed):
+        import itertools
+        import random
+        rng = random.Random(seed)
+        n = rng.randint(2, 6)
+        cost = [[rng.randint(0, 40) for _ in range(n)] for _ in range(n)]
+        brute = min(sum(cost[i][p[i]] for i in range(n))
+                    for p in itertools.permutations(range(n)))
+        assert total_cost(cost, hungarian(cost)) == brute
+
+    def test_handles_more_columns_than_rows(self):
+        cost = [[5, 2, 9], [3, 8, 1]]
+        assert total_cost(cost, hungarian(cost)) == 3
+
+    def test_handles_more_rows_than_columns(self):
+        cost = [[5, 2], [3, 8], [7, 1]]
+        a = hungarian(cost)
+        assert sum(1 for j in a if j != -1) == 2, "one row must be unassigned"
+
+    def test_beats_greedy_where_greedy_strands_a_row(self):
+        """
+        The case that justifies the algorithm. Row 0 marginally prefers column
+        0, but row 1 can only use column 0. Greedy takes it first and strands
+        row 1; optimal gives up one unit on row 0 to keep row 1 matchable.
+        """
+        cost = [[1, 2], [1, IMPOSSIBLE]]
+        g, h = greedy(cost), hungarian(cost)
+        assert -1 in g, "greedy should strand a row here"
+        assert -1 not in h, "optimal should match both"
+        assert total_cost(cost, h) < IMPOSSIBLE
+
+    def test_greedy_and_optimal_agree_when_there_is_no_contention(self):
+        """Most batches. Worth asserting so the added machinery is known not
+        to change the ordinary case."""
+        cost = [[1, 90, 90], [90, 1, 90], [90, 90, 1]]
+        assert hungarian(cost) == greedy(cost) == [0, 1, 2]
+
+    def test_an_amount_that_does_not_tie_is_inadmissible_not_expensive(self):
+        """Reconciliation has no notion of a nearly correct amount."""
+        c, why = pair_cost(45000, date(2026, 8, 11), 45001, date(2026, 8, 10))
+        assert c == IMPOSSIBLE
+        assert "does not tie" in why
+
+    def test_date_drift_inside_the_window_is_free(self):
+        c, _ = pair_cost(45000, date(2026, 8, 11), 45000, date(2026, 8, 10))
+        assert c == 0
+
+    def test_date_drift_outside_the_window_costs_but_stays_admissible(self):
+        c, _ = pair_cost(45000, date(2026, 8, 14), 45000, date(2026, 8, 10))
+        assert 0 < c < IMPOSSIBLE
+
+    def test_far_dates_are_inadmissible(self):
+        c, why = pair_cost(45000, date(2026, 10, 1), 45000, date(2026, 8, 10))
+        assert c == IMPOSSIBLE
+        assert "outside the payout window" in why

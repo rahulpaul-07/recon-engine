@@ -144,6 +144,10 @@ class DefectPlan:
     rounding_noise: int = 4
     net_arithmetic_error: int = 2
     missing_bank_row: int = 1
+    # Two settlements sharing an amount and a payout window, with both bank
+    # rows' references stripped. Only then is Tier 2 genuinely ambiguous and
+    # the pairing question real rather than hypothetical.
+    ambiguous_pair: int = 0
 
 
 def scaled_plan(scale: float) -> "DefectPlan":
@@ -215,6 +219,7 @@ class Generator:
         self._apply_defects()
         self._assign_settlements()
         self._build_bank_statement()
+        self._plant_ambiguity()
 
     # -- step 1: clean baseline -------------------------------------------
     def _build_orders_and_payments(self) -> None:
@@ -539,6 +544,45 @@ class Generator:
                             "UTR absent or mangled in narration; must be recovered "
                             "from free text or inferred from amount + date")
 
+    def _plant_ambiguity(self) -> None:
+        """
+        Make two settlements indistinguishable by amount and window.
+
+        Real ambiguity is rare, which is why the engine had never exercised
+        this path. Rather than leave the pairing logic untested, the generator
+        can construct the collision deliberately: equalise two settlements'
+        totals, put their payouts in the same window, and remove the reference
+        from both bank rows so nothing but amount and date remains.
+        """
+        n = self.plan.ambiguous_pair
+        if not n:
+            return
+
+        eligible = [(sid, s) for sid, s in self.settlements.items()
+                    if s["total_paise"] > 0]
+        for _ in range(n):
+            if len(eligible) < 2:
+                break
+            (sid_a, a), (sid_b, b) = self.rng.sample(eligible, 2)
+            eligible = [(k, v) for k, v in eligible if k not in (sid_a, sid_b)]
+
+            b["total_paise"] = a["total_paise"]
+            b["payout_date"] = a["payout_date"]
+            b["capture_date"] = a["capture_date"]
+
+            for sid, s in ((sid_a, a), (sid_b, b)):
+                for row in self.bank:
+                    if row.utr == s["utr"]:
+                        row.utr = None
+                        row.description = "TRF FROM RAZORPAY SOFTWARE PVT LTD"
+                        row.credit_paise = s["total_paise"]
+                        row.value_date = s["payout_date"]
+                        self._truth(row.bank_txn_id, "bank_row",
+                                    "ambiguous_match", sid,
+                                    "two settlements share this amount and "
+                                    "payout window, and neither bank row "
+                                    "carries a usable reference")
+
     # -- output -----------------------------------------------------------
     def write(self, outdir: Path) -> None:
         outdir.mkdir(parents=True, exist_ok=True)
@@ -612,6 +656,9 @@ def main() -> None:
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--orders", type=int, default=120)
     ap.add_argument("--out", type=str, default="data")
+    ap.add_argument("--ambiguous", type=int, default=0,
+                    help="plant N pairs of settlements sharing an amount and "
+                         "window, with references stripped")
     ap.add_argument("--compound", action="store_true",
                     help="allow several defects on one record (adversarial)")
     ap.add_argument("--defect-scale", type=float, default=1.0,
@@ -619,8 +666,9 @@ def main() -> None:
                          "density of roughly 12%%)")
     args = ap.parse_args()
 
-    gen = Generator(seed=args.seed, n_orders=args.orders,
-                    plan=scaled_plan(args.defect_scale),
+    plan = scaled_plan(args.defect_scale)
+    plan.ambiguous_pair = args.ambiguous
+    gen = Generator(seed=args.seed, n_orders=args.orders, plan=plan,
                     allow_compound=args.compound)
     gen.run()
     gen.write(Path(args.out))
