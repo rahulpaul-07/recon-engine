@@ -424,3 +424,22 @@ difference between knowing the ordinary path is safe and assuming it.
 Recording this because the tempting version of this entry is "added optimal
 assignment for ambiguous matches", which is true, sounds better, and implies an
 improvement that fifteen trials say does not exist.
+
+---
+
+### 2026-09-03 - The answer key and the engine started measuring different things.
+
+Adding optimal assignment dropped accuracy on the ambiguous batch to 98.5%.
+Two records expected `ambiguous_match` and were reported `clean`.
+
+The engine is right. The generator plants ambiguity and records that as the
+expected classification, which was correct while ambiguity was unresolvable.
+The moment a solver could resolve it, the key was recording a condition -- this
+record was constructed to be ambiguous -- rather than an outcome -- the engine
+should fail to resolve this. Those are different claims and they diverged
+silently.
+
+Same shape as the compound-defect finding: an answer key encodes assumptions
+about the engine, so changing the engine can invalidate the key without
+touching the data. Worth knowing that a ground-truth file is not automatically
+neutral just because the engine never reads it.
