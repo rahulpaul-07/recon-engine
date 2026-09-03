@@ -314,6 +314,37 @@ def run_throughput(sizes: list[int], workdir: Path) -> None:
     print()
 
 
+def cohens_kappa(a: list[str], b: list[str]) -> float:
+    """
+    Agreement between two classifiers, corrected for chance.
+
+    Reporting that the agent agreed with the deterministic engine on 12 of 13
+    records is true and slightly generous. Two classifiers drawing from the
+    same small label set will agree on some records by coincidence, and a raw
+    percentage counts those as successes.
+
+    Kappa is (observed - expected) / (1 - expected), where expected is the
+    agreement two independent classifiers would reach given their individual
+    label frequencies. 1.0 is perfect, 0.0 is chance, negative is worse than
+    chance.
+
+    On a sample this small the figure is unstable and should be read as an
+    indication rather than a measurement -- which is itself worth stating,
+    because a confident kappa on 13 records would be its own kind of
+    overclaiming.
+    """
+    if not a or len(a) != len(b):
+        return 0.0
+    n = len(a)
+    observed = sum(1 for x, y in zip(a, b) if x == y) / n
+
+    labels = set(a) | set(b)
+    expected = sum((a.count(l) / n) * (b.count(l) / n) for l in labels)
+    if expected >= 1.0:
+        return 1.0
+    return (observed - expected) / (1 - expected)
+
+
 # --------------------------------------------------------------------------
 # Adversarial evaluation
 # --------------------------------------------------------------------------
