@@ -11,6 +11,8 @@ output from the run described below: match rate, per-class metrics against the
 answer key, every exception with its reason, and the agent's full investigation
 trace for each one.
 
+**[Live app](https://recon-engine-yjim.onrender.com)** — upload your own three CSVs, or run the sample batch. The reconciliation needs no API key; the agent and Q&A panels do.
+
 Reconciles a merchant's order ledger against a payment gateway's transaction
 report and the corresponding bank statement. Resolves what it can, records how
 certain each resolution is, and reports an honest, categorised list of what it
