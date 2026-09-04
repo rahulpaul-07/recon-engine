@@ -463,8 +463,12 @@ def build(datadir: Path, outfile: Path, traces_path: Path | None = None,
             'resolution agent\'s constraints are enforced in code and tested '
             'without a model; these are not.</div>')
 
+    # A web upload lands in a throwaway temp directory. Naming it in the
+    # report tells the reader nothing and exposes a server path.
+    source = ('the uploaded files' if datadir.name.startswith('recon-')
+              else str(datadir))
     parts.append(
-        f'<footer>Generated from {datadir}. '
+        f'<footer>Generated from {source}. '
         f'Reconciles a merchant ledger against a payment gateway report and '
         f'the corresponding bank statement. Ground truth is never read by the '
         f'reconciliation engine.</footer></body></html>')
