@@ -453,3 +453,28 @@ difference between knowing the ordinary path is safe and assuming it.
 Recording this because the tempting version of this entry is "added optimal
 assignment for ambiguous matches", which is true, sounds better, and implies an
 improvement that fifteen trials say does not exist.
+
+---
+
+### 2026-09-04 - Two tests passed for the wrong reason, and cost money when they failed.
+
+The web layer's degradation tests assert that `/investigate` and `/ask` return
+503 with an explanation when no language model is configured. They passed in CI
+and in my container, and failed on a machine with `ANTHROPIC_API_KEY` set at
+user level -- because there the provider *was* available, the endpoints returned
+200, and the agent genuinely investigated three records. The suite took 67
+seconds instead of two, and the difference was real model calls.
+
+The test asserted "no key configured" behaviour without ensuring no key was
+configured. It was reading the developer's environment as though it were part
+of the fixture.
+
+Now cleared explicitly with monkeypatch across all eight provider variables, and
+verified to pass both with and without a key present.
+
+Two things worth keeping from this. A test whose result depends on the machine
+it runs on is not testing what it claims to test -- it passed for two days in CI
+purely because CI has no keys, which is a coincidence rather than a guarantee.
+And a suite that spends money when run in the wrong environment is a suite
+people quietly stop running, which is a slower and worse failure than a red
+build.

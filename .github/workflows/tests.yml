@@ -28,7 +28,9 @@ jobs:
         # Deliberately not installing any provider SDK. The suite covers the
         # agent's constraints by calling them directly, so it must pass with
         # no model available and no network access.
-        run: python -m pip install --upgrade pip pytest
+        run: |
+          python -m pip install --upgrade pip pytest
+          python -m pip install -r requirements-web.txt
 
       - name: Run tests
         run: python -m pytest tests/ -q
