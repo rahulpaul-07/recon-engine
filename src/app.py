@@ -398,9 +398,13 @@ async def reconcile(
         return JSONResponse(status_code=400, content={
             "detail": f"Could not parse the files: {exc}"})
     except Exception:                                     # noqa: BLE001
+        # The trace goes to the server log, not to the response. A public
+        # endpoint should not hand a visitor absolute paths and internals.
+        print(traceback.format_exc(limit=3), file=sys.stderr)
         return JSONResponse(status_code=500, content={
-            "detail": "Reconciliation failed:\n"
-                      + traceback.format_exc(limit=3)})
+            "detail": "Reconciliation failed. The files parsed but the " +
+                      "engine could not complete. Check that each file " +
+                      "has the columns listed beside its upload field."})
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
