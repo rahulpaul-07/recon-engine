@@ -1,11 +1,14 @@
 # Tests
 
 ```bash
-pip install pytest
+pip install pytest httpx2==2.12.0
 python3 -m pytest tests/ -q
 ```
 
-67 tests, no network access and no API key required. The agent's constraints are
+httpx2 is required by Starlette's TestClient, which the web-interface
+tests use. The engine itself needs neither it nor any other dependency.
+
+104 tests, no network access and no API key required. The agent's constraints are
 enforced in code rather than requested in the prompt, so all of them are tested
 by calling that code directly with the output a misbehaving model would produce.
 
