@@ -161,10 +161,10 @@ reason.</div>
 
 <div class="note">
 Files are parsed in memory and deleted when the request completes; nothing is
-stored. This page runs the deterministic engine only &mdash; no language model
-is involved, so there is no API key and no per-request cost. The agent and the
-settlement Q&amp;A run on the command line, where a key belongs to the operator
-rather than to a public server.
+stored. The reconciliation above runs the deterministic engine only &mdash; no
+language model is involved, so there is no API key and no per-request cost. The
+model-backed layers below do need a key, and it is used for that one request
+only &mdash; never stored, never logged.
 <br><br>
 Amounts are integer paise: <code>45000</code> means &#8377;450.00.
 </div>
