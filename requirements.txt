@@ -1,5 +1,14 @@
+# Reconciliation engine. The deterministic path has no runtime dependency;
+# these are for the model-backed layers and the web interface.
 anthropic>=0.40.0
 
+# Web interface. Installed here as well as in requirements-web.txt because
+# platforms that auto-detect a Python service look for this file by default,
+# and a start command that cannot find uvicorn fails after a successful build.
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+python-multipart>=0.0.12
+
 # Optional alternative providers. Any one is sufficient; several give failover.
-# openai>=1.50.0       # required for groq, cerebras, openrouter, together, mistral
-# google-genai>=0.3.0  # required for gemini
+# openai>=1.50.0       # groq, cerebras, openrouter, together, mistral
+# google-genai>=0.3.0  # gemini

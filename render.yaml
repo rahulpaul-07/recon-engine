@@ -1,0 +1,14 @@
+# Render deployment. Free tier is sufficient: the deterministic engine needs no
+# API key, no database and no persistent disk, and a 5,000-row batch reconciles
+# in about 20 milliseconds.
+services:
+  - type: web
+    name: recon-engine
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements-web.txt
+    startCommand: python -m uvicorn app:app --host 0.0.0.0 --port $PORT --app-dir src
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12"

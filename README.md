@@ -2,7 +2,7 @@
 
 [![tests](https://github.com/rahulpaul-07/recon-engine/actions/workflows/tests.yml/badge.svg)](https://github.com/rahulpaul-07/recon-engine/actions/workflows/tests.yml)
 [![python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue)](https://github.com/rahulpaul-07/recon-engine/actions)
-[![tests](https://img.shields.io/badge/tests-87%20passing-brightgreen)](tests/)
+[![tests](https://img.shields.io/badge/tests-104%20passing-brightgreen)](tests/)
 [![accuracy](https://img.shields.io/badge/classification-100%25%20vs%20answer%20key-brightgreen)](#results)
 [![license](https://img.shields.io/badge/license-MIT-lightgrey)](LICENSE)
 
@@ -27,7 +27,7 @@ reads.
 | Resolved | **90.8%** (95% CI 84.9-94.5%) |
 | Classification accuracy | **100.0%** across 14 classes |
 | Under compound defects | degrades to 92.3% at 82% defect density |
-| Tests | 87, verified by mutation |
+| Tests | 104, verified by mutation |
 | Across 12 independent batches | 92.7% +/- 0.4% resolved, 100.0% +/- 0.0% accuracy |
 | Throughput | ~233,000 entities/sec, flat from 141 to 5,022 |
 | Exceptions | 13, each listed with a reason. None dropped. |
@@ -50,7 +50,7 @@ python3 src/investigate.py --data data --json agent_traces.json
 python3 src/report.py --data data --traces agent_traces.json \
                       --qa qa_answers.json --out report.html
 python3 src/ask.py --data data --demo --json qa_answers.json
-python3 -m pytest tests/ -q                           # 87 tests
+python3 -m pytest tests/ -q                           # 104 tests
 python3 src/evaluate.py --stress --compound --seeds 3 # where it breaks
 ```
 
@@ -222,13 +222,38 @@ Recorded rather than fixed. It touches the answer key, the matcher's return
 type, the evaluator and the report, and stating a known limitation is worth more
 than widening a taxonomy on the last day of a build.
 
+## Web interface
+
+```bash
+pip install -r requirements-web.txt
+python -m uvicorn app:app --app-dir src --reload
+```
+
+Upload a ledger, a gateway report and a bank statement at `localhost:8000` and
+the same report comes back. A settlement report and a ground-truth file are
+optional; supplying the latter adds measured per-class accuracy.
+
+Two tiers of endpoint. **`/reconcile` and `/sample` need no language model** —
+no key, no per-request cost, nothing to leak, and they cannot fail because a
+vendor is down.
+
+**`/investigate` and `/ask` run the agent and the settlement Q&A.** Exposing
+those publicly carries real cost, so: a key may come from the environment or
+from a request header (a visitor's, used once, never stored or logged);
+requests are globally rate limited; and the agent is capped at three records
+per call. With no key from either source the endpoints say so plainly rather
+than failing obscurely — which is the state CI runs in and asserts.
+
+Uploads are parsed in memory and written to a temporary directory deleted when
+the request completes. Nothing is stored.
+
 ## Continuous integration
 
 Every push runs three jobs:
 
 | Job | What it proves |
 |---|---|
-| `test` | 87 tests pass on Python 3.10 through 3.13, with no provider SDK installed |
+| `test` | 104 tests pass on Python 3.10 through 3.13, with no provider SDK installed |
 | `reconcile` | a clean checkout generates, reconciles, grades and reports end to end |
 | `provider-degradation` | the engine reconciles correctly with **no** language model configured |
 
@@ -289,6 +314,7 @@ src/investigate.py    runs the agent over unresolved records
 src/ask.py            settlement Q&A over aggregate queries
 src/evaluate.py       grading, Wilson intervals, variance, throughput
 src/report.py         self-contained HTML report
+src/app.py            web interface over the deterministic engine
 ```
 
 `ARCHITECTURE.md` - how the system is built and why each part is shaped that way,
