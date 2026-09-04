@@ -1,0 +1,221 @@
+entity_id,entity_type,expected_classification,expected_match_target,notes
+BNK000002,bank_row,messy_narration,setl_0001,UTR absent or mangled in narration; must be recovered from free text or inferred from amount + date
+BNK000003,bank_row,messy_narration,setl_0002,UTR absent or mangled in narration; must be recovered from free text or inferred from amount + date
+BNK000005,bank_row,orphan_bank_credit,,REAL BREAK: bank credit corresponds to no settlement
+BNK000008,bank_row,messy_narration,setl_0006,UTR absent or mangled in narration; must be recovered from free text or inferred from amount + date
+BNK000009,bank_row,orphan_bank_credit,,REAL BREAK: bank credit corresponds to no settlement
+BNK000010,bank_row,orphan_bank_credit,,REAL BREAK: bank credit corresponds to no settlement
+BNK000013,bank_row,orphan_bank_credit,,REAL BREAK: bank credit corresponds to no settlement
+BNK000014,bank_row,orphan_bank_credit,,REAL BREAK: bank credit corresponds to no settlement
+BNK000015,bank_row,messy_narration,setl_0009,UTR absent or mangled in narration; must be recovered from free text or inferred from amount + date
+BNK000017,bank_row,orphan_bank_credit,,REAL BREAK: bank credit corresponds to no settlement
+BNK000027,bank_row,messy_narration,setl_0020,UTR absent or mangled in narration; must be recovered from free text or inferred from amount + date
+BNK000028,bank_row,messy_narration,setl_0021,UTR absent or mangled in narration; must be recovered from free text or inferred from amount + date
+GAP_BEFORE_BNK000019,statement_gap,missing_bank_row,setl_0011,settlement paid but its statement line is absent; detectable only from the running balance gap
+GAP_BEFORE_BNK000020,statement_gap,missing_bank_row,setl_0012,settlement paid but its statement line is absent; detectable only from the running balance gap
+GAP_BEFORE_BNK000025,statement_gap,missing_bank_row,setl_0017,settlement paid but its statement line is absent; detectable only from the running balance gap
+ORD4000,order,partial_refund,,partial refund of 4499.00 against 8999.00
+ORD4001,order,clean,,matches 1:1 with its payment
+ORD4002,order,clean,,matches 1:1 with its payment
+ORD4003,order,unsettled,,captured near end of window; not yet paid out. CORRECTLY unmatched -- not an error
+ORD4004,order,missing_payment,,REAL BREAK: order marked paid but no gateway record exists
+ORD4005,order,clean,,matches 1:1 with its payment
+ORD4006,order,clean,,matches 1:1 with its payment
+ORD4007,order,fee_mismatch,pay_000008,gateway fee exceeds rule for upi by 1.50
+ORD4008,order,clean,,matches 1:1 with its payment
+ORD4009,order,clean,,matches 1:1 with its payment
+ORD4010,order,chargeback,,"chargeback reverses the sale in a LATER settlement period, plus a penalty fee"
+ORD4011,order,clean,,matches 1:1 with its payment
+ORD4012,order,failed_payment,pay_000013,payment attempt failed; no bank credit will ever exist
+ORD4013,order,clean,,matches 1:1 with its payment
+ORD4014,order,rounding_noise,pay_000015,"1 paise fee drift from a different rounding rule; must be tolerated, not reported"
+ORD4015,order,clean,,matches 1:1 with its payment
+ORD4016,order,clean,,matches 1:1 with its payment
+ORD4017,order,clean,,matches 1:1 with its payment
+ORD4018,order,failed_payment,pay_000019,payment attempt failed; no bank credit will ever exist
+ORD4019,order,clean,,matches 1:1 with its payment
+ORD4020,order,clean,,matches 1:1 with its payment
+ORD4021,order,clean,,matches 1:1 with its payment
+ORD4022,order,refund,pay_000023,full refund; net settlement contribution is negative
+ORD4023,order,partial_refund,,partial refund of 375.00 against 750.99
+ORD4024,order,clean,,matches 1:1 with its payment
+ORD4025,order,clean,,matches 1:1 with its payment
+ORD4026,order,rounding_noise,pay_000027,"1 paise fee drift from a different rounding rule; must be tolerated, not reported"
+ORD4027,order,clean,,matches 1:1 with its payment
+ORD4028,order,clean,,matches 1:1 with its payment
+ORD4029,order,fee_mismatch,pay_000030,gateway fee exceeds rule for card by 2.25
+ORD4030,order,unsettled,,captured near end of window; not yet paid out. CORRECTLY unmatched -- not an error
+ORD4031,order,clean,,matches 1:1 with its payment
+ORD4032,order,unsettled,,captured near end of window; not yet paid out. CORRECTLY unmatched -- not an error
+ORD4033,order,clean,,matches 1:1 with its payment
+ORD4034,order,clean,,matches 1:1 with its payment
+ORD4035,order,clean,,matches 1:1 with its payment
+ORD4036,order,partial_refund,,partial refund of 375.00 against 750.00
+ORD4037,order,clean,,matches 1:1 with its payment
+ORD4038,order,fee_mismatch,pay_000039,gateway fee exceeds rule for upi by 5.00
+ORD4039,order,clean,,matches 1:1 with its payment
+ORD4040,order,refund,pay_000041,full refund; net settlement contribution is negative
+ORD4041,order,chargeback,,"chargeback reverses the sale in a LATER settlement period, plus a penalty fee"
+ORD4042,order,clean,,matches 1:1 with its payment
+ORD4043,order,refund,pay_000044,full refund; net settlement contribution is negative
+ORD4044,order,clean,,matches 1:1 with its payment
+ORD4045,order,fee_mismatch,pay_000046,gateway fee exceeds rule for upi by 5.00
+ORD4046,order,missing_payment,,REAL BREAK: order marked paid but no gateway record exists
+ORD4047,order,duplicate,,two captures exist for one order; the voided one must be excluded from settlement
+ORD4048,order,clean,,matches 1:1 with its payment
+ORD4049,order,clean,,matches 1:1 with its payment
+ORD4050,order,clean,,matches 1:1 with its payment
+ORD4051,order,clean,,matches 1:1 with its payment
+ORD4052,order,failed_payment,pay_000053,payment attempt failed; no bank credit will ever exist
+ORD4053,order,clean,,matches 1:1 with its payment
+ORD4054,order,duplicate,,two captures exist for one order; the voided one must be excluded from settlement
+ORD4055,order,rounding_noise,pay_000056,"1 paise fee drift from a different rounding rule; must be tolerated, not reported"
+ORD4056,order,clean,,matches 1:1 with its payment
+ORD4057,order,unsettled,,captured near end of window; not yet paid out. CORRECTLY unmatched -- not an error
+ORD4058,order,clean,,matches 1:1 with its payment
+ORD4059,order,clean,,matches 1:1 with its payment
+ORD4060,order,clean,,matches 1:1 with its payment
+ORD4061,order,partial_refund,,partial refund of 449.00 against 899.00
+ORD4062,order,clean,,matches 1:1 with its payment
+ORD4063,order,duplicate,,two captures exist for one order; the voided one must be excluded from settlement
+ORD4064,order,clean,,matches 1:1 with its payment
+ORD4065,order,refund,pay_000066,full refund; net settlement contribution is negative
+ORD4066,order,unsettled,,captured near end of window; not yet paid out. CORRECTLY unmatched -- not an error
+ORD4067,order,rounding_noise,pay_000068,"1 paise fee drift from a different rounding rule; must be tolerated, not reported"
+ORD4068,order,rounding_noise,pay_000069,"1 paise fee drift from a different rounding rule; must be tolerated, not reported"
+ORD4069,order,clean,,matches 1:1 with its payment
+ORD4070,order,missing_payment,,REAL BREAK: order marked paid but no gateway record exists
+ORD4071,order,clean,,matches 1:1 with its payment
+ORD4072,order,clean,,matches 1:1 with its payment
+ORD4073,order,unsettled,,captured near end of window; not yet paid out. CORRECTLY unmatched -- not an error
+ORD4074,order,clean,,matches 1:1 with its payment
+ORD4075,order,clean,,matches 1:1 with its payment
+ORD4076,order,partial_refund,,partial refund of 99.00 against 199.00
+ORD4077,order,clean,,matches 1:1 with its payment
+ORD4078,order,clean,,matches 1:1 with its payment
+ORD4079,order,chargeback,,"chargeback reverses the sale in a LATER settlement period, plus a penalty fee"
+ORD4080,order,clean,,matches 1:1 with its payment
+ORD4081,order,unsettled,,captured near end of window; not yet paid out. CORRECTLY unmatched -- not an error
+ORD4082,order,clean,,matches 1:1 with its payment
+ORD4083,order,fee_mismatch,pay_000084,gateway fee exceeds rule for card by 5.00
+ORD4084,order,clean,,matches 1:1 with its payment
+ORD4085,order,clean,,matches 1:1 with its payment
+ORD4086,order,chargeback,,"chargeback reverses the sale in a LATER settlement period, plus a penalty fee"
+ORD4087,order,unsettled,,captured near end of window; not yet paid out. CORRECTLY unmatched -- not an error
+ORD4088,order,duplicate,,two captures exist for one order; the voided one must be excluded from settlement
+ORD4089,order,clean,,matches 1:1 with its payment
+ORD4090,order,clean,,matches 1:1 with its payment
+ORD4091,order,clean,,matches 1:1 with its payment
+ORD4092,order,missing_payment,,REAL BREAK: order marked paid but no gateway record exists
+ORD4093,order,clean,,matches 1:1 with its payment
+ORD4094,order,clean,,matches 1:1 with its payment
+ORD4095,order,clean,,matches 1:1 with its payment
+ORD4096,order,duplicate,,two captures exist for one order; the voided one must be excluded from settlement
+ORD4097,order,duplicate,,two captures exist for one order; the voided one must be excluded from settlement
+ORD4098,order,failed_payment,pay_000099,payment attempt failed; no bank credit will ever exist
+ORD4099,order,clean,,matches 1:1 with its payment
+ORD4100,order,rounding_noise,pay_000101,"1 paise fee drift from a different rounding rule; must be tolerated, not reported"
+ORD4101,order,clean,,matches 1:1 with its payment
+ORD4102,order,clean,,matches 1:1 with its payment
+ORD4103,order,chargeback,,"chargeback reverses the sale in a LATER settlement period, plus a penalty fee"
+ORD4104,order,partial_refund,,partial refund of 225.00 against 450.99
+ORD4105,order,unsettled,,captured near end of window; not yet paid out. CORRECTLY unmatched -- not an error
+ORD4106,order,clean,,matches 1:1 with its payment
+ORD4107,order,failed_payment,pay_000108,payment attempt failed; no bank credit will ever exist
+ORD4108,order,partial_refund,,partial refund of 249.00 against 499.50
+ORD4109,order,clean,,matches 1:1 with its payment
+ORD4110,order,clean,,matches 1:1 with its payment
+ORD4111,order,fee_mismatch,pay_000112,gateway fee exceeds rule for card by 5.00
+ORD4112,order,clean,,matches 1:1 with its payment
+ORD4113,order,fee_mismatch,pay_000114,gateway fee exceeds rule for upi by 1.50
+ORD4114,order,failed_payment,pay_000115,payment attempt failed; no bank credit will ever exist
+ORD4115,order,clean,,matches 1:1 with its payment
+ORD4116,order,refund,pay_000117,full refund; net settlement contribution is negative
+ORD4117,order,clean,,matches 1:1 with its payment
+ORD4118,order,clean,,matches 1:1 with its payment
+ORD4119,order,clean,,matches 1:1 with its payment
+ORD4120,order,failed_payment,pay_000121,payment attempt failed; no bank credit will ever exist
+ORD4121,order,clean,,matches 1:1 with its payment
+ORD4122,order,clean,,matches 1:1 with its payment
+ORD4123,order,clean,,matches 1:1 with its payment
+ORD4124,order,failed_payment,pay_000125,payment attempt failed; no bank credit will ever exist
+ORD4125,order,failed_payment,pay_000126,payment attempt failed; no bank credit will ever exist
+ORD4126,order,unsettled,,captured near end of window; not yet paid out. CORRECTLY unmatched -- not an error
+ORD4127,order,refund,pay_000128,full refund; net settlement contribution is negative
+ORD4128,order,fee_mismatch,pay_000129,gateway fee exceeds rule for upi by 1.50
+ORD4129,order,clean,,matches 1:1 with its payment
+ORD4130,order,refund,pay_000131,full refund; net settlement contribution is negative
+ORD4131,order,rounding_noise,pay_000132,"1 paise fee drift from a different rounding rule; must be tolerated, not reported"
+ORD4132,order,missing_payment,,REAL BREAK: order marked paid but no gateway record exists
+ORD4133,order,clean,,matches 1:1 with its payment
+ORD4134,order,partial_refund,,partial refund of 299.00 against 599.00
+ORD4135,order,clean,,matches 1:1 with its payment
+ORD4136,order,clean,,matches 1:1 with its payment
+ORD4137,order,clean,,matches 1:1 with its payment
+ORD4138,order,failed_payment,pay_000139,payment attempt failed; no bank credit will ever exist
+ORD4139,order,clean,,matches 1:1 with its payment
+ORD4140,order,clean,,matches 1:1 with its payment
+ORD4141,order,clean,,matches 1:1 with its payment
+ORD4142,order,partial_refund,,partial refund of 375.00 against 750.00
+ORD4143,order,clean,,matches 1:1 with its payment
+ORD4144,order,clean,,matches 1:1 with its payment
+ORD4145,order,rounding_noise,pay_000146,"1 paise fee drift from a different rounding rule; must be tolerated, not reported"
+ORD4146,order,clean,,matches 1:1 with its payment
+ORD4147,order,clean,,matches 1:1 with its payment
+ORD4148,order,clean,,matches 1:1 with its payment
+ORD4149,order,chargeback,,"chargeback reverses the sale in a LATER settlement period, plus a penalty fee"
+ORD4150,order,refund,pay_000151,full refund; net settlement contribution is negative
+ORD4151,order,clean,,matches 1:1 with its payment
+ORD4152,order,refund,pay_000153,full refund; net settlement contribution is negative
+ORD4153,order,clean,,matches 1:1 with its payment
+ORD4154,order,clean,,matches 1:1 with its payment
+ORD4155,order,fee_mismatch,pay_000156,gateway fee exceeds rule for upi by 5.00
+ORD4156,order,chargeback,,"chargeback reverses the sale in a LATER settlement period, plus a penalty fee"
+ORD4157,order,clean,,matches 1:1 with its payment
+ORD4158,order,missing_payment,,REAL BREAK: order marked paid but no gateway record exists
+ORD4159,order,unsettled,,captured near end of window; not yet paid out. CORRECTLY unmatched -- not an error
+ORD4160,order,failed_payment,pay_000161,payment attempt failed; no bank credit will ever exist
+ORD4161,order,clean,,matches 1:1 with its payment
+ORD4162,order,clean,,matches 1:1 with its payment
+ORD4163,order,clean,,matches 1:1 with its payment
+ORD4164,order,clean,,matches 1:1 with its payment
+ORD4165,order,clean,,matches 1:1 with its payment
+ORD4166,order,rounding_noise,pay_000167,"1 paise fee drift from a different rounding rule; must be tolerated, not reported"
+ORD4167,order,clean,,matches 1:1 with its payment
+ORD4168,order,refund,pay_000169,full refund; net settlement contribution is negative
+ORD4169,order,clean,,matches 1:1 with its payment
+ORD4170,order,clean,,matches 1:1 with its payment
+ORD4171,order,clean,,matches 1:1 with its payment
+ORD4172,order,clean,,matches 1:1 with its payment
+ORD4173,order,failed_payment,pay_000174,payment attempt failed; no bank credit will ever exist
+ORD4174,order,unsettled,,captured near end of window; not yet paid out. CORRECTLY unmatched -- not an error
+ORD4175,order,clean,,matches 1:1 with its payment
+ORD4176,order,failed_payment,pay_000177,payment attempt failed; no bank credit will ever exist
+ORD4177,order,unsettled,,captured near end of window; not yet paid out. CORRECTLY unmatched -- not an error
+ORD4178,order,clean,,matches 1:1 with its payment
+ORD4179,order,clean,,matches 1:1 with its payment
+ORD4180,order,clean,,matches 1:1 with its payment
+ORD4181,order,clean,,matches 1:1 with its payment
+ORD4182,order,clean,,matches 1:1 with its payment
+ORD4183,order,rounding_noise,pay_000184,"1 paise fee drift from a different rounding rule; must be tolerated, not reported"
+ORD4184,order,unsettled,,captured near end of window; not yet paid out. CORRECTLY unmatched -- not an error
+ORD4185,order,fee_mismatch,pay_000186,gateway fee exceeds rule for netbanking by 2.25
+ORD4186,order,clean,,matches 1:1 with its payment
+ORD4187,order,clean,,matches 1:1 with its payment
+ORD4188,order,clean,,matches 1:1 with its payment
+ORD4189,order,rounding_noise,pay_000190,"1 paise fee drift from a different rounding rule; must be tolerated, not reported"
+ORD4190,order,clean,,matches 1:1 with its payment
+ORD4191,order,clean,,matches 1:1 with its payment
+ORD4192,order,clean,,matches 1:1 with its payment
+ORD4193,order,unsettled,,captured near end of window; not yet paid out. CORRECTLY unmatched -- not an error
+ORD4194,order,clean,,matches 1:1 with its payment
+ORD4195,order,refund,pay_000196,full refund; net settlement contribution is negative
+ORD4196,order,clean,,matches 1:1 with its payment
+ORD4197,order,clean,,matches 1:1 with its payment
+ORD4198,order,unsettled,,captured near end of window; not yet paid out. CORRECTLY unmatched -- not an error
+ORD4199,order,refund,pay_000200,full refund; net settlement contribution is negative
+pay_000015,txn,net_arithmetic_error,ORD4014,gross - fee - gst != net; the gateway's own row is internally inconsistent
+pay_000066,txn,net_arithmetic_error,ORD4065,gross - fee - gst != net; the gateway's own row is internally inconsistent
+pay_000084,txn,net_arithmetic_error,ORD4083,gross - fee - gst != net; the gateway's own row is internally inconsistent
+pay_000172,txn,net_arithmetic_error,ORD4171,gross - fee - gst != net; the gateway's own row is internally inconsistent
+pay_000198,txn,net_arithmetic_error,ORD4197,gross - fee - gst != net; the gateway's own row is internally inconsistent
