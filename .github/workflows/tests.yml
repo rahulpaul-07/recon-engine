@@ -28,8 +28,11 @@ jobs:
         # Deliberately not installing any provider SDK. The suite covers the
         # agent's constraints by calling them directly, so it must pass with
         # no model available and no network access.
+        #
+        # httpx2 is a test-only dependency: Starlette's TestClient imports it.
+        # It is not needed to serve the app, so it stays out of requirements-web.txt.
         run: |
-          python -m pip install --upgrade pip pytest
+          python -m pip install --upgrade pip pytest httpx2==2.12.0
           python -m pip install -r requirements-web.txt
 
       - name: Run tests
