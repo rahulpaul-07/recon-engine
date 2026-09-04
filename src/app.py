@@ -155,8 +155,6 @@ reason.</div>
 
   <button type="submit" id="go">Reconcile</button>
   <button type="button" class="ghost" id="sample">Use the sample batch</button>
-  <div class="note" style="margin-top:12px">The report opens in a new tab, so
-    this page stays put.</div>
 </form>
 
 <div class="note">
@@ -226,6 +224,10 @@ async function send(url, body){
       err.innerHTML = '<div class="note" style="margin-top:16px">' +
         'Pop-up blocked, so the report was downloaded instead.</div>';
     }
+    // Clear the inputs after a successful upload, so a second click
+    // cannot silently re-send the previous batch. Uploads only: the
+    // sample button passes no body and leaves selections alone.
+    if (body) form.reset();
   } catch (e) { fail('Could not reach the server: ' + e.message); }
   finally { go.disabled = false; go.textContent = 'Reconcile'; }
 }
