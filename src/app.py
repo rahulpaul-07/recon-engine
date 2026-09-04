@@ -243,13 +243,19 @@ function busy(msg){ ai.innerHTML =
   '<div class="note" style="margin-top:16px">' + msg + '</div>'; }
 
 async function callAI(url, body){
-  const key = document.getElementById('key').value.trim();
-  const headers = {};
-  if (key) headers['x-api-key'] = key;
-  if (body) headers['Content-Type'] = 'application/json';
-  const r = await fetch(url, {method:'POST', headers,
-                             body: body ? JSON.stringify(body) : null});
-  return {ok: r.ok, data: await r.json()};
+  // Both AI calls are slow enough to invite an impatient second click,
+  // which would spend the rate limit twice and race the two responses.
+  const btns = ['askBtn','invBtn'].map(i => document.getElementById(i));
+  btns.forEach(b => b.disabled = true);
+  try {
+    const key = document.getElementById('key').value.trim();
+    const headers = {};
+    if (key) headers['x-api-key'] = key;
+    if (body) headers['Content-Type'] = 'application/json';
+    const r = await fetch(url, {method:'POST', headers,
+                               body: body ? JSON.stringify(body) : null});
+    return {ok: r.ok, data: await r.json()};
+  } finally { btns.forEach(b => b.disabled = false); }
 }
 
 document.getElementById('askBtn').addEventListener('click', async () => {
