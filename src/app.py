@@ -53,7 +53,7 @@ REQUIRED = ("ledger", "gateway", "bank")
 # public and the cost is the operator's. Deliberately tight: the point is to
 # demonstrate the agent, not to offer a free reconciliation service.
 AGENT_MAX_RECORDS = 3
-RATE_LIMIT_PER_HOUR = 20
+RATE_LIMIT_PER_HOUR = 60
 
 _calls: list[float] = []
 
