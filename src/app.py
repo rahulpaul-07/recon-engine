@@ -175,6 +175,8 @@ figure is reproducible from the repository.</div>
   <button type="button" class="ghost" id="sample">Use the sample batch</button>
 </form>
 
+<div id="err"></div>
+
 <div class="note">
 Files are parsed in memory and deleted when the request completes; nothing is
 stored. The reconciliation above runs the deterministic engine only &mdash; no
@@ -210,8 +212,6 @@ language model; the reconciliation above does not.</div>
   <button type="button" class="ghost" id="invBtn">Investigate 3 exceptions</button>
   <div id="ai"></div>
 </div>
-
-<div id="err"></div>
 
 <script>
 const form = document.getElementById('f');
