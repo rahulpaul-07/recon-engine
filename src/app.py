@@ -155,6 +155,8 @@ reason.</div>
 
   <button type="submit" id="go">Reconcile</button>
   <button type="button" class="ghost" id="sample">Use the sample batch</button>
+  <div class="note" style="margin-top:12px">The report opens in a new tab, so
+    this page stays put.</div>
 </form>
 
 <div class="note">
@@ -208,7 +210,22 @@ async function send(url, body){
     const r = await fetch(url, body ? {method:'POST', body} : {method:'POST'});
     if (!r.ok) { const j = await r.json().catch(() => ({detail:'request failed'}));
                  fail(j.detail || 'request failed'); return; }
-    document.open(); document.write(await r.text()); document.close();
+    // Open the report in its own tab. Writing it over this page leaves no
+    // history entry, so the back button does nothing and the visitor has to
+    // retype the URL to reach the upload form again.
+    const html = await r.text();
+    const w = window.open('', '_blank');
+    if (w) { w.document.open(); w.document.write(html); w.document.close();
+             err.innerHTML = '<div class="note" style="margin-top:16px">' +
+               'Report opened in a new tab.</div>'; }
+    else {  // pop-up blocked: fall back to a download rather than losing it
+      const url = URL.createObjectURL(new Blob([html], {type:'text/html'}));
+      const a = document.createElement('a');
+      a.href = url; a.download = 'reconciliation-report.html'; a.click();
+      URL.revokeObjectURL(url);
+      err.innerHTML = '<div class="note" style="margin-top:16px">' +
+        'Pop-up blocked, so the report was downloaded instead.</div>';
+    }
   } catch (e) { fail('Could not reach the server: ' + e.message); }
   finally { go.disabled = false; go.textContent = 'Reconcile'; }
 }
