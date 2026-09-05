@@ -314,6 +314,21 @@ built.
 
 ---
 
+### The same boundary over HTTP
+
+The web interface does not weaken any of the above. `/ask` and `/investigate`
+accept the caller's own three CSVs as multipart, reconcile them inside the
+request, answer, and delete them with the response. No batch is held between
+calls, so a question is always about files supplied alongside it, and the
+storage claim on the landing page stays literally true rather than
+approximately true.
+
+The batch is validated during preparation rather than in the handler. That
+ordering is deliberate: the handler runs after the provider check, so an
+unreadable file would otherwise surface as an opaque 500 while the identical
+upload to `/reconcile` returns a message naming the missing column. Judging
+the files first also means a header typo costs no model calls.
+
 ## 6. Provider independence
 
 Seven providers across twenty provider/model candidates. Anthropic and Gemini

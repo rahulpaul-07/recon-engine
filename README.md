@@ -2,7 +2,7 @@
 
 [![tests](https://github.com/rahulpaul-07/recon-engine/actions/workflows/tests.yml/badge.svg)](https://github.com/rahulpaul-07/recon-engine/actions/workflows/tests.yml)
 [![python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue)](https://github.com/rahulpaul-07/recon-engine/actions)
-[![tests](https://img.shields.io/badge/tests-104%20passing-brightgreen)](tests/)
+[![tests](https://img.shields.io/badge/tests-111%20passing-brightgreen)](tests/)
 [![accuracy](https://img.shields.io/badge/classification-100%25%20vs%20answer%20key-brightgreen)](#results)
 [![license](https://img.shields.io/badge/license-MIT-lightgrey)](LICENSE)
 
@@ -12,6 +12,10 @@ answer key, every exception with its reason, and the agent's full investigation
 trace for each one.
 
 **[Live app](https://recon-engine-yjim.onrender.com)** — upload your own three CSVs, or run the sample batch. Hosted on a free tier, so the first load can take about 30 seconds. The reconciliation runs with no API key at all; the agent and Q&A panels use one, and you can supply your own for a single request instead.
+
+**[Five-minute walkthrough](https://youtu.be/NjFKpmBX1Zk)** — the engine run
+end to end, what the confidence tiers mean, where the model sits, and the bug
+my own test data was hiding from me.
 
 Reconciles a merchant's order ledger against a payment gateway's transaction
 report and the corresponding bank statement. Resolves what it can, records how
@@ -29,7 +33,7 @@ reads.
 | Resolved | **90.8%** (95% CI 84.9-94.5%) |
 | Classification accuracy | **100.0%** across 14 classes |
 | Under compound defects | degrades to 92.3% at 82% defect density |
-| Tests | 104, verified by mutation |
+| Tests | 111, verified by mutation |
 | Across 12 independent batches | 92.7% +/- 0.4% resolved, 100.0% +/- 0.0% accuracy |
 | Throughput | ~233,000 entities/sec, flat from 141 to 5,022 |
 | Exceptions | 13, each listed with a reason. None dropped. |
@@ -246,8 +250,17 @@ requests are globally rate limited; and the agent is capped at three records
 per call. With no key from either source the endpoints say so plainly rather
 than failing obscurely — which is the state CI runs in and asserts.
 
+Both model-backed endpoints answer about whatever is in the upload fields. If
+the three required files are selected, they travel with the request, get
+reconciled in it, and are deleted with the response; with nothing selected the
+endpoints fall back to a freshly generated sample batch. The response says
+which of the two it used, so no answer is ambiguous about its own source. A
+partial upload is refused rather than silently falling back — answering a
+question about data the caller never sent is worse than declining.
+
 Uploads are parsed in memory and written to a temporary directory deleted when
-the request completes. Nothing is stored.
+the request completes. Nothing is stored, and because nothing is stored, a
+question can only be asked about files sent in the same request.
 
 ## Continuous integration
 
