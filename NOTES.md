@@ -21,6 +21,10 @@ afterwards. Entries are in the order they happened.
 - **2026-09-02** — The Q&A agent did arithmetic it was told not to, and got it right.
 - **2026-09-02** — Every amount was reported in dollars.
 - **2026-09-03** — Optimal assignment never beat greedy on real data.
+- **2026-09-04** — Two tests passed for the wrong reason, and cost money when they failed.
+- **2026-09-05** — CI went red on four interpreters over a package I had never heard of.
+- **2026-09-05** — A regression test that passed with its own fix deleted.
+- **2026-09-05** — The loader rejected the one file a merchant is most likely to upload.
 
 The entries worth reading first, if reading only three:
 
@@ -478,3 +482,74 @@ purely because CI has no keys, which is a coincidence rather than a guarantee.
 And a suite that spends money when run in the wrong environment is a suite
 people quietly stop running, which is a slower and worse failure than a red
 build.
+
+### 2026-09-05 - CI went red on four interpreters over a package I had never heard of.
+
+Local suite green, CI red on 3.10, 3.11, 3.12 and 3.13 with the same error:
+Starlette's `TestClient` raising at import because `httpx2` was not installed.
+Not a test failure -- collection never finished.
+
+The cause was drift. `requirements-web.txt` pins nothing, so CI resolved a newer
+Starlette than the one my environment had resolved weeks earlier, and that
+version imports `httpx2` rather than `httpx`. My machine already had the package
+for unrelated reasons, so the break was invisible locally. It had been red for
+three commits before I looked.
+
+The part worth recording is what I did next. The error message ends with `pip
+install httpx2`, and the obvious move is to run it. I did not, because "install
+the package this error names" is exactly the shape of a typosquat, and this is a
+reconciliation tool that people would point at financial data. I checked PyPI
+first: authored by the same person who wrote `httpx` and Starlette, published
+under the pydantic organisation, first released in May. A legitimate upstream
+rename, not an impostor. Then I pinned it in the workflow rather than in
+`requirements-web.txt`, because it is a test dependency and the deployed service
+does not need it.
+
+The real defect is that nothing is pinned, which I have not fixed yet. Pinning
+`httpx2` closes this instance and leaves the class open.
+
+### 2026-09-05 - A regression test that passed with its own fix deleted.
+
+Uploading only the three required files to `/ask` failed: the loader expects
+every file to exist and nothing had written the header-only stubs for the
+optional ones, so the engine could not read a directory the server had just
+built. I fixed it and added a test that posted three files and asserted a 503.
+
+The test was worthless. `/ask` checks for a provider before it loads anything,
+so with no key configured the endpoint returns 503 long before the loader runs.
+The test passed whether or not the stubs were written -- I confirmed it by
+deleting the fix and watching it stay green.
+
+Replaced with one that calls the batch preparation directly and then loads the
+result, which fails without the stubs. While rewriting it I moved validation
+into preparation as well, so unreadable files now get the same 400 naming the
+missing column that `/reconcile` gives, instead of surfacing as an opaque 500
+after the provider check.
+
+This is the same failure as the 09-04 entry wearing different clothes: a test
+that asserts on a status code reached before the code under test ever runs. The
+mutation check is what caught both. Writing the test is not the safeguard;
+deleting the fix and watching the test fail is.
+
+### 2026-09-05 - The loader rejected the one file a merchant is most likely to upload.
+
+I fed the upload path the things real files carry rather than the things my
+generator produces: Windows line endings, trailing blank lines, an extra column,
+a quoted field containing a comma, unicode in a bank narration, headers with no
+rows. All fine. Then a byte order mark, and it broke.
+
+Excel writes a BOM whenever it saves a CSV as UTF-8. Read as plain `utf-8` the
+mark lands inside the first header name, so `order_id` becomes a column the
+loader cannot find. The resulting message is the worst kind: "a required column
+is missing: order_id", shown to someone looking straight at an `order_id`
+column. Nothing in the file appears wrong, because the offending bytes are
+invisible.
+
+Fixed by opening every CSV as `utf-8-sig`, which consumes the mark when present
+and is identical to `utf-8` when it is not -- five places in `matcher.load` and
+one in `evaluate.py` for the answer key.
+
+Worth noting what let this survive so long: every file the engine had ever read
+was written by my own generator, which writes plain UTF-8. Seven sample datasets
+and a hundred-odd tests all agreed with each other because they all came from
+the same source. The first genuinely foreign input broke it immediately.
