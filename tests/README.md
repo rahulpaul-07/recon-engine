@@ -8,7 +8,7 @@ python3 -m pytest tests/ -q
 httpx2 is required by Starlette's TestClient, which the web-interface
 tests use. The engine itself needs neither it nor any other dependency.
 
-108 tests, no network access and no API key required. The agent's constraints are
+110 tests, no network access and no API key required. The agent's constraints are
 enforced in code rather than requested in the prompt, so all of them are tested
 by calling that code directly with the output a misbehaving model would produce.
 

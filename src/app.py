@@ -141,7 +141,7 @@ reason.</div>
 <div class="stats">
   <div class="stat"><div class="n">90.8%</div><div class="l">resolved</div></div>
   <div class="stat"><div class="n">100%</div><div class="l">classification accuracy</div></div>
-  <div class="stat"><div class="n">108</div><div class="l">tests, Python 3.10&ndash;3.13</div></div>
+  <div class="stat"><div class="n">110</div><div class="l">tests, Python 3.10&ndash;3.13</div></div>
   <div class="stat"><div class="n">7</div><div class="l">providers, scoped failover</div></div>
 </div>
 <div class="statnote">Measured on the reference batch against a ground-truth
@@ -570,6 +570,23 @@ async def _read_request(request: Request) -> tuple[str, Path | None, str | None]
             (tmp / "ground_truth.csv").write_text(
                 "entity_id,entity_type,expected_classification,"
                 "expected_match_target,notes\n", encoding="utf-8")
+
+        # Validate here rather than in the handler. Two reasons: the handler
+        # runs after the provider check, so a bad batch would otherwise fail
+        # as an opaque 500 while the identical upload to /reconcile gets a
+        # message naming the column; and rejecting unreadable files before any
+        # model call means a typo in a header costs nothing.
+        try:
+            load(tmp)
+        except KeyError as exc:
+            shutil.rmtree(tmp, ignore_errors=True)
+            return question, None, (
+                f"A required column is missing: {exc}. Check the field names "
+                f"listed beside each upload.")
+        except ValueError as exc:
+            shutil.rmtree(tmp, ignore_errors=True)
+            return question, None, f"Could not parse the files: {exc}"
+
         return question, tmp, None
     except Exception:
         shutil.rmtree(tmp, ignore_errors=True)

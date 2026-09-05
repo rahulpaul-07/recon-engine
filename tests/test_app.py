@@ -9,6 +9,7 @@ language model.
 
 from __future__ import annotations
 
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -42,6 +43,45 @@ def batch(tmp_path_factory):
 def _files(batch, names=("ledger", "gateway", "bank", "settlements")):
     return {n: (f"{n}.csv", (batch / f"{n}.csv").read_bytes(), "text/csv")
             for n in names}
+
+
+def _multipart(files: dict, question: str = ""):
+    """
+    Build a real multipart request without a running server.
+
+    The endpoints are reached through TestClient everywhere else. This exists
+    because the interesting failure happens after the provider check, which a
+    keyless test never gets past.
+    """
+    from starlette.requests import Request
+
+    boundary = "----recontest"
+    body = b""
+    for name, data in files.items():
+        body += (f"--{boundary}\r\n"
+                 f'Content-Disposition: form-data; name="{name}"; '
+                 f'filename="{name}.csv"\r\n'
+                 f"Content-Type: text/csv\r\n\r\n").encode()
+        body += data + b"\r\n"
+    if question:
+        body += (f"--{boundary}\r\n"
+                 f'Content-Disposition: form-data; name="question"\r\n\r\n'
+                 f"{question}\r\n").encode()
+    body += f"--{boundary}--\r\n".encode()
+
+    scope = {
+        "type": "http", "method": "POST", "path": "/ask",
+        "headers": [
+            (b"content-type",
+             f"multipart/form-data; boundary={boundary}".encode()),
+            (b"content-length", str(len(body)).encode()),
+        ],
+    }
+
+    async def receive():
+        return {"type": "http.request", "body": body, "more_body": False}
+
+    return Request(scope, receive)
 
 
 class TestWebInterface:
@@ -193,17 +233,55 @@ class TestModelBackedEndpoints:
         r = client.post("/investigate", files=_files(batch))
         assert r.status_code == 503
 
-    def test_the_three_required_files_are_enough_to_ask(self, client, batch,
-                                                        no_provider):
+    @pytest.mark.parametrize("names", [
+        ("ledger", "gateway", "bank"),
+        ("ledger", "gateway", "bank", "settlements"),
+    ])
+    def test_an_upload_produces_a_batch_the_engine_can_load(self, batch, names):
         """
-        Settlements are optional on the reconcile form and must be optional
-        here too. Without a header-only stub the loader fails on a file the
-        caller was never asked for.
+        Settlements are optional on the form and must be optional here too.
+
+        This asserts on the loader rather than on a status code deliberately.
+        Going through the endpoint without a model returns 503 before the
+        loader ever runs, so an endpoint test passes whether or not the
+        optional files are stubbed -- it cannot see this bug. The failure it
+        guards against was exactly that: three files uploaded, no settlements
+        written, and the engine unable to read its own working directory.
         """
-        r = client.post("/ask",
-                        files=_files(batch, ("ledger", "gateway", "bank")),
+        import asyncio
+
+        from app import _read_request
+        from matcher import load
+
+        req = _multipart(
+            {n: (batch / f"{n}.csv").read_bytes() for n in names},
+            question="how much went to fees?")
+        question, updir, err = asyncio.run(_read_request(req))
+        assert err is None and updir is not None
+        assert question == "how much went to fees?"
+        try:
+            orders, txns, settlements, bank = load(updir)
+            assert orders, "the uploaded ledger produced no orders"
+        finally:
+            shutil.rmtree(updir, ignore_errors=True)
+
+    def test_unreadable_files_are_rejected_before_any_model_call(self, client):
+        """
+        The same files that /reconcile rejects with a named column must be
+        rejected the same way here. Without validation during preparation the
+        loader fails inside the handler, after the provider check, and the
+        caller gets an opaque 500 for a fixable typo.
+
+        A 400 rather than a 503 is the assertion: it proves the batch was
+        judged before a model was ever looked for.
+        """
+        d = ROOT / "datasets" / "07-malformed"
+        files = {n: (f"{n}.csv", (d / f"{n}.csv").read_bytes(), "text/csv")
+                 for n in ("ledger", "gateway", "bank")}
+        r = client.post("/ask", files=files,
                         data={"question": "how much went to fees?"})
-        assert r.status_code == 503
+        assert r.status_code == 400
+        assert "order_id" in r.json()["detail"]
 
     def test_a_request_key_is_never_left_in_the_environment(self, no_provider):
         """

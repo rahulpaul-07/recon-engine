@@ -52,7 +52,7 @@ python3 src/investigate.py --data data --json agent_traces.json
 python3 src/report.py --data data --traces agent_traces.json \
                       --qa qa_answers.json --out report.html
 python3 src/ask.py --data data --demo --json qa_answers.json
-python3 -m pytest tests/ -q                           # 108 tests
+python3 -m pytest tests/ -q                           # 110 tests
 python3 src/evaluate.py --stress --compound --seeds 3 # where it breaks
 ```
 
@@ -255,7 +255,7 @@ Every push runs three jobs:
 
 | Job | What it proves |
 |---|---|
-| `test` | 108 tests pass on Python 3.10 through 3.13, with no provider SDK installed |
+| `test` | 110 tests pass on Python 3.10 through 3.13, with no provider SDK installed |
 | `reconcile` | a clean checkout generates, reconciles, grades and reports end to end |
 | `provider-degradation` | the engine reconciles correctly with **no** language model configured |
 
