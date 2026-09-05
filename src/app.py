@@ -141,7 +141,7 @@ reason.</div>
 <div class="stats">
   <div class="stat"><div class="n">90.8%</div><div class="l">resolved</div></div>
   <div class="stat"><div class="n">100%</div><div class="l">classification accuracy</div></div>
-  <div class="stat"><div class="n">107</div><div class="l">tests, Python 3.10&ndash;3.13</div></div>
+  <div class="stat"><div class="n">108</div><div class="l">tests, Python 3.10&ndash;3.13</div></div>
   <div class="stat"><div class="n">7</div><div class="l">providers, scoped failover</div></div>
 </div>
 <div class="statnote">Measured on the reference batch against a ground-truth
@@ -557,6 +557,19 @@ async def _read_request(request: Request) -> tuple[str, Path | None, str | None]
                     return question, None, f"{name}.csv is empty"
                 continue
             (tmp / f"{name}.csv").write_bytes(data)
+
+        # The loader expects every file to exist. /reconcile writes header-only
+        # stubs for the optional ones and this path must do the same: an empty
+        # settlement report is honest -- it means every bank row has to be
+        # matched by inference rather than by reference.
+        if not (tmp / "settlements.csv").exists():
+            (tmp / "settlements.csv").write_text(
+                "settlement_id,capture_date,payout_date,total_paise,utr\n",
+                encoding="utf-8")
+        if not (tmp / "ground_truth.csv").exists():
+            (tmp / "ground_truth.csv").write_text(
+                "entity_id,entity_type,expected_classification,"
+                "expected_match_target,notes\n", encoding="utf-8")
         return question, tmp, None
     except Exception:
         shutil.rmtree(tmp, ignore_errors=True)
@@ -624,9 +637,12 @@ async def investigate(request: Request) -> JSONResponse:
                              "capped_at": AGENT_MAX_RECORDS,
                              "source": "your files" if updir else "sample batch",
                              "investigations": out})
-    except Exception as exc:                              # noqa: BLE001
-        return JSONResponse(status_code=500,
-                            content={"detail": f"investigation failed: {exc}"})
+    except Exception:                                     # noqa: BLE001
+        print(traceback.format_exc(limit=3), file=sys.stderr)
+        return JSONResponse(status_code=500, content={
+            "detail": "The investigation could not complete. If you supplied "
+                      "your own files, check they have the columns listed "
+                      "beside each upload field."})
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
@@ -675,9 +691,12 @@ async def ask(request: Request) -> JSONResponse:
                        "than in code. This layer has a weaker guarantee than "
                        "the resolution agent."),
         })
-    except Exception as exc:                              # noqa: BLE001
-        return JSONResponse(status_code=500,
-                            content={"detail": f"question failed: {exc}"})
+    except Exception:                                     # noqa: BLE001
+        print(traceback.format_exc(limit=3), file=sys.stderr)
+        return JSONResponse(status_code=500, content={
+            "detail": "The question could not be answered. If you supplied "
+                      "your own files, check they have the columns listed "
+                      "beside each upload field."})
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 

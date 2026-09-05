@@ -193,6 +193,18 @@ class TestModelBackedEndpoints:
         r = client.post("/investigate", files=_files(batch))
         assert r.status_code == 503
 
+    def test_the_three_required_files_are_enough_to_ask(self, client, batch,
+                                                        no_provider):
+        """
+        Settlements are optional on the reconcile form and must be optional
+        here too. Without a header-only stub the loader fails on a file the
+        caller was never asked for.
+        """
+        r = client.post("/ask",
+                        files=_files(batch, ("ledger", "gateway", "bank")),
+                        data={"question": "how much went to fees?"})
+        assert r.status_code == 503
+
     def test_a_request_key_is_never_left_in_the_environment(self, no_provider):
         """
         A visitor's key is used for one request and must not persist. If it
