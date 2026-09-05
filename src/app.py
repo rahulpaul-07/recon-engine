@@ -141,7 +141,7 @@ reason.</div>
 <div class="stats">
   <div class="stat"><div class="n">90.8%</div><div class="l">resolved</div></div>
   <div class="stat"><div class="n">100%</div><div class="l">classification accuracy</div></div>
-  <div class="stat"><div class="n">104</div><div class="l">tests, Python 3.10&ndash;3.13</div></div>
+  <div class="stat"><div class="n">107</div><div class="l">tests, Python 3.10&ndash;3.13</div></div>
   <div class="stat"><div class="n">7</div><div class="l">providers, scoped failover</div></div>
 </div>
 <div class="statnote">Measured on the reference batch against a ground-truth
@@ -188,8 +188,11 @@ Amounts are integer paise: <code>45000</code> means &#8377;450.00.
 </div>
 
 <h1 style="font-size:20px;margin-top:44px">Try the AI layers</h1>
-<div class="sub">Both run against a freshly generated sample batch. They need a
-language model; the reconciliation above does not.</div>
+<div class="sub">If you have chosen the three files above, both layers answer about those
+files &mdash; they are sent with the request and deleted with the response,
+so nothing is kept between calls. With no files chosen they run against a
+freshly generated sample batch. Both need a language model; the
+reconciliation above does not.</div>
 
 <div class="card">
   <div class="field">
@@ -242,10 +245,9 @@ async function send(url, body){
       err.innerHTML = '<div class="note" style="margin-top:16px">' +
         'Pop-up blocked, so the report was downloaded instead.</div>';
     }
-    // Clear the inputs after a successful upload, so a second click
-    // cannot silently re-send the previous batch. Uploads only: the
-    // sample button passes no body and leaves selections alone.
-    if (body) form.reset();
+    // The selections are deliberately kept. The AI layers below answer about
+    // whatever is chosen here, so clearing them after a reconcile would
+    // silently switch those answers back to the sample batch.
   } catch (e) { fail('Could not reach the server: ' + e.message); }
   finally { go.disabled = false; go.textContent = 'Reconcile'; }
 }
@@ -262,6 +264,20 @@ const esc = t => String(t).replace(/[&<>]/g, c =>
 function busy(msg){ ai.innerHTML =
   '<div class="note" style="margin-top:16px">' + msg + '</div>'; }
 
+function chosenFiles(){
+  const out = {};
+  for (const n of ['ledger','gateway','bank','settlements']){
+    const el = form.querySelector('[name="' + n + '"]');
+    if (el && el.files && el.files.length) out[n] = el.files[0];
+  }
+  return out;
+}
+
+function usingOwnFiles(){
+  const f = chosenFiles();
+  return !!(f.ledger && f.gateway && f.bank);
+}
+
 async function callAI(url, body){
   // Both AI calls are slow enough to invite an impatient second click,
   // which would spend the rate limit twice and race the two responses.
@@ -271,15 +287,33 @@ async function callAI(url, body){
     const key = document.getElementById('key').value.trim();
     const headers = {};
     if (key) headers['x-api-key'] = key;
-    if (body) headers['Content-Type'] = 'application/json';
-    const r = await fetch(url, {method:'POST', headers,
-                               body: body ? JSON.stringify(body) : null});
+    // When the three required files are chosen, they travel with this request
+    // and the layers answer about them. They are deleted with the response --
+    // nothing is held server-side between calls, so the only way to ask about
+    // your own books is to send them with the question.
+    let payload = null;
+    if (usingOwnFiles()){
+      payload = new FormData();
+      const files = chosenFiles();
+      for (const n in files) payload.append(n, files[n]);
+      if (body && body.question) payload.append('question', body.question);
+    } else if (body) {
+      headers['Content-Type'] = 'application/json';
+      payload = JSON.stringify(body);
+    }
+    const r = await fetch(url, {method:'POST', headers, body: payload});
     return {ok: r.ok, data: await r.json()};
   } finally { btns.forEach(b => b.disabled = false); }
 }
 
+function sourceLine(data){
+  return '<div class="note" style="margin-top:10px">Answered about <b>' +
+         esc(data.source || 'sample batch') + '</b>.</div>';
+}
+
 document.getElementById('askBtn').addEventListener('click', async () => {
-  busy('Asking. The model writes a structured query, the server runs it, and the model explains the real result...');
+  busy('Asking about ' + (usingOwnFiles() ? 'your uploaded files' : 'a freshly generated sample batch') +
+    '. The model writes a structured query, the server runs it, and the model explains the real result...');
   const {ok, data} = await callAI('/ask', {question: document.getElementById('q').value});
   if (!ok) { ai.innerHTML = '<div class="err">' + esc(data.detail) + '</div>'; return; }
   ai.innerHTML =
@@ -287,18 +321,20 @@ document.getElementById('askBtn').addEventListener('click', async () => {
     '<div style="font-size:14px;line-height:1.7">' + esc(data.answer || data.error) + '</div>' +
     '<div class="note" style="margin-top:12px"><code>' +
       esc((data.tools_used||[]).join(', ') || 'no query') + '</code> &middot; ' +
-      data.model_calls + ' model call(s)</div>' +
+      data.model_calls + ' model call(s)</div>' + sourceLine(data) +
     '<div class="err" style="background:#1c1a14;border-left-color:#7a6020;color:#c9bfa0">' +
       esc(data.caveat) + '</div></div>';
 });
 
 document.getElementById('invBtn').addEventListener('click', async () => {
-  busy('Investigating. The agent picks its own tools from nine deterministic checks, up to five rounds per record. This takes about a minute...');
+  busy('Investigating ' + (usingOwnFiles() ? 'your uploaded files' : 'a freshly generated sample batch') +
+    '. The agent picks its own tools from nine deterministic checks, up to five rounds per record. This takes about a minute...');
   const {ok, data} = await callAI('/investigate', null);
   if (!ok) { ai.innerHTML = '<div class="err">' + esc(data.detail) + '</div>'; return; }
   let h = '<div class="note" style="margin-top:16px">Answered by <code>' +
           esc(data.provider) + '</code>, capped at ' + data.capped_at +
-          ' records.</div>';
+          ' records, about <b>' + esc(data.source || 'sample batch') +
+          '</b>.</div>';
   for (const inv of data.investigations){
     h += '<div class="card" style="margin-top:12px;background:#131313">' +
       '<div style="font-size:13px"><code>' + esc(inv.entity_id) + '</code> &mdash; ' +
@@ -466,6 +502,67 @@ def _sample_batch() -> Path:
     return tmp
 
 
+async def _read_request(request: Request) -> tuple[str, Path | None, str | None]:
+    """
+    Read one model-backed request, in either of the two shapes it accepts.
+
+    Multipart carries the same CSVs the reconcile form takes, so the question
+    is answered about the caller's own books. JSON carries none, and a sample
+    batch is generated instead.
+
+    Uploads are written to a throwaway directory and deleted with the response,
+    exactly as /reconcile does. Nothing survives the request: the answer is
+    always about files supplied in the same call, never about state the server
+    kept between calls. That is what keeps the storage claim on the page true.
+
+    Returns (question, upload_dir_or_None, error). A None directory means the
+    caller supplied no files and the sample batch should be used.
+    """
+    ctype = request.headers.get("content-type", "")
+    if not ctype.startswith("multipart/form-data"):
+        try:
+            body = await request.json()
+        except Exception:                                 # noqa: BLE001
+            body = {}
+        return (body.get("question") or "").strip(), None, None
+
+    form = await request.form()
+    question = str(form.get("question") or "").strip()
+    named = {n: form.get(n)
+             for n in ("ledger", "gateway", "bank", "settlements")}
+    supplied = {n: f for n, f in named.items()
+                if hasattr(f, "read") and getattr(f, "filename", "")}
+
+    if not any(n in supplied for n in REQUIRED):
+        return question, None, None
+
+    missing = [n for n in REQUIRED if n not in supplied]
+    if missing:
+        return question, None, (
+            f"{missing[0]}.csv is missing. Asking about your own data needs "
+            f"all three of ledger, gateway and bank.")
+
+    tmp = Path(tempfile.mkdtemp(prefix="recon-"))
+    try:
+        for name, f in supplied.items():
+            data = await f.read()
+            if len(data) > MAX_BYTES:
+                shutil.rmtree(tmp, ignore_errors=True)
+                return question, None, (
+                    f"{name}.csv is larger than "
+                    f"{MAX_BYTES // 1024 // 1024} MB")
+            if not data.strip():
+                if name in REQUIRED:
+                    shutil.rmtree(tmp, ignore_errors=True)
+                    return question, None, f"{name}.csv is empty"
+                continue
+            (tmp / f"{name}.csv").write_bytes(data)
+        return question, tmp, None
+    except Exception:
+        shutil.rmtree(tmp, ignore_errors=True)
+        raise
+
+
 @app.post("/investigate")
 async def investigate(request: Request) -> JSONResponse:
     """
@@ -490,7 +587,11 @@ async def investigate(request: Request) -> JSONResponse:
                       "is used for this request only and never stored.",
             "reason": getattr(provider, "reason", "unconfigured")})
 
-    tmp = _sample_batch()
+    _q, updir, err = await _read_request(request)
+    if err:
+        return JSONResponse(status_code=400, content={"detail": err})
+
+    tmp = updir or _sample_batch()
     try:
         from agent import ResolutionAgent, build_context
         from investigate import facts_for
@@ -521,6 +622,7 @@ async def investigate(request: Request) -> JSONResponse:
             })
         return JSONResponse({"provider": getattr(provider, "name", "?"),
                              "capped_at": AGENT_MAX_RECORDS,
+                             "source": "your files" if updir else "sample batch",
                              "investigations": out})
     except Exception as exc:                              # noqa: BLE001
         return JSONResponse(status_code=500,
@@ -536,24 +638,27 @@ async def ask(request: Request) -> JSONResponse:
         return JSONResponse(status_code=429, content={
             "detail": f"Rate limit reached ({RATE_LIMIT_PER_HOUR}/hour)."})
 
-    body = await request.json()
-    question = (body.get("question") or "").strip()
-    if not question:
-        return JSONResponse(status_code=400,
-                            content={"detail": "No question supplied."})
-    if len(question) > 400:
-        return JSONResponse(status_code=400,
-                            content={"detail": "Question is too long."})
+    question, updir, err = await _read_request(request)
+    if err:
+        return JSONResponse(status_code=400, content={"detail": err})
+    if not question or len(question) > 400:
+        if updir:
+            shutil.rmtree(updir, ignore_errors=True)
+        return JSONResponse(status_code=400, content={
+            "detail": "No question supplied." if not question
+                      else "Question is too long."})
 
     key = request.headers.get("x-api-key") or None
     provider = _provider_for(key)
     if not provider.available:
+        if updir:
+            shutil.rmtree(updir, ignore_errors=True)
         return JSONResponse(status_code=503, content={
             "detail": "No language model is configured. Set ANTHROPIC_API_KEY "
                       "on the server, or paste a key above — used for this "
                       "request only, never stored."})
 
-    tmp = _sample_batch()
+    tmp = updir or _sample_batch()
     try:
         from ask import QAAgent, QueryTools
 
@@ -564,6 +669,7 @@ async def ask(request: Request) -> JSONResponse:
         return JSONResponse({
             "question": a.question, "answer": a.text, "error": a.error,
             "tools_used": a.tools_used, "model_calls": a.model_calls,
+            "source": "your files" if updir else "sample batch",
             "caveat": ("Every figure came from a query result, but the rule "
                        "against combining figures lives in the prompt rather "
                        "than in code. This layer has a weaker guarantee than "

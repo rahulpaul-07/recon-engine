@@ -165,6 +165,34 @@ class TestModelBackedEndpoints:
         r = client.post("/ask", json={"question": "x" * 500})
         assert r.status_code == 400
 
+    def test_a_question_can_be_asked_about_uploaded_files(self, client, batch,
+                                                          no_provider):
+        """
+        The layers answer about files sent with the request. Nothing is stored
+        between calls, so the upload must reach the provider check -- a 503
+        here proves the multipart body was parsed and a batch was prepared.
+        """
+        r = client.post("/ask", files=_files(batch),
+                        data={"question": "how much went to fees?"})
+        assert r.status_code == 503
+
+    def test_a_partial_upload_is_rejected_before_any_model_call(self, client,
+                                                               batch):
+        """
+        Two of the three required files is not a batch. Falling back to the
+        sample silently would answer a question about data the caller never
+        sent, which is worse than refusing.
+        """
+        r = client.post("/ask", files=_files(batch, ("ledger", "gateway")),
+                        data={"question": "how much went to fees?"})
+        assert r.status_code == 400
+        assert "bank.csv" in r.json()["detail"]
+
+    def test_investigate_accepts_uploaded_files(self, client, batch,
+                                                no_provider):
+        r = client.post("/investigate", files=_files(batch))
+        assert r.status_code == 503
+
     def test_a_request_key_is_never_left_in_the_environment(self, no_provider):
         """
         A visitor's key is used for one request and must not persist. If it
