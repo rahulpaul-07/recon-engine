@@ -1,0 +1,285 @@
+diff --git a/README.md b/README.md
+index 1f2328a..3f73d90 100644
+--- a/README.md
++++ b/README.md
+@@ -52,7 +52,7 @@ python3 src/investigate.py --data data --json agent_traces.json
+ python3 src/report.py --data data --traces agent_traces.json \
+                       --qa qa_answers.json --out report.html
+ python3 src/ask.py --data data --demo --json qa_answers.json
+-python3 -m pytest tests/ -q                           # 108 tests
++python3 -m pytest tests/ -q                           # 111 tests
+ python3 src/evaluate.py --stress --compound --seeds 3 # where it breaks
+ ```
+ 
+@@ -255,7 +255,7 @@ Every push runs three jobs:
+ 
+ | Job | What it proves |
+ |---|---|
+-| `test` | 108 tests pass on Python 3.10 through 3.13, with no provider SDK installed |
++| `test` | 111 tests pass on Python 3.10 through 3.13, with no provider SDK installed |
+ | `reconcile` | a clean checkout generates, reconciles, grades and reports end to end |
+ | `provider-degradation` | the engine reconciles correctly with **no** language model configured |
+ 
+diff --git a/src/app.py b/src/app.py
+index 28b088f..f949859 100644
+--- a/src/app.py
++++ b/src/app.py
+@@ -141,7 +141,7 @@ reason.</div>
+ <div class="stats">
+   <div class="stat"><div class="n">90.8%</div><div class="l">resolved</div></div>
+   <div class="stat"><div class="n">100%</div><div class="l">classification accuracy</div></div>
+-  <div class="stat"><div class="n">108</div><div class="l">tests, Python 3.10&ndash;3.13</div></div>
++  <div class="stat"><div class="n">111</div><div class="l">tests, Python 3.10&ndash;3.13</div></div>
+   <div class="stat"><div class="n">7</div><div class="l">providers, scoped failover</div></div>
+ </div>
+ <div class="statnote">Measured on the reference batch against a ground-truth
+@@ -570,6 +570,26 @@ async def _read_request(request: Request) -> tuple[str, Path | None, str | None]
+             (tmp / "ground_truth.csv").write_text(
+                 "entity_id,entity_type,expected_classification,"
+                 "expected_match_target,notes\n", encoding="utf-8")
++
++        # Validate here rather than in the handler. The handler runs after the
++        # provider check, so a bad batch would otherwise surface as an opaque
++        # 500 while the identical upload to /reconcile gets a message naming
++        # the column. Judging the files first also means a header typo costs
++        # no model calls.
++        try:
++            orders, _t, _s, _b = load(tmp)
++        except KeyError as exc:
++            shutil.rmtree(tmp, ignore_errors=True)
++            return question, None, (
++                f"A required column is missing: {exc}. Check the field names "
++                f"listed beside each upload.")
++        except ValueError as exc:
++            shutil.rmtree(tmp, ignore_errors=True)
++            return question, None, f"Could not parse the files: {exc}"
++        if not orders:
++            shutil.rmtree(tmp, ignore_errors=True)
++            return question, None, "the ledger contains no rows"
++
+         return question, tmp, None
+     except Exception:
+         shutil.rmtree(tmp, ignore_errors=True)
+diff --git a/src/evaluate.py b/src/evaluate.py
+index 8bff21a..20d47b4 100644
+--- a/src/evaluate.py
++++ b/src/evaluate.py
+@@ -107,7 +107,9 @@ EQUIVALENT = {
+ 
+ 
+ def load_truth(datadir: Path) -> dict[str, str]:
+-    with (datadir / "ground_truth.csv").open() as f:
++    # utf-8-sig for the same reason as matcher.load: an answer key written by
++    # Excel carries a byte order mark that would corrupt the first column name.
++    with (datadir / "ground_truth.csv").open(encoding="utf-8-sig") as f:
+         return {r["entity_id"]: r["expected_classification"]
+                 for r in csv.DictReader(f)}
+ 
+diff --git a/src/matcher.py b/src/matcher.py
+index 58c2a61..14090f8 100644
+--- a/src/matcher.py
++++ b/src/matcher.py
+@@ -115,7 +115,17 @@ def _int_or_none(v: str) -> int | None:
+ 
+ 
+ def load(datadir: Path) -> tuple[list[Order], list[Txn], list[Settlement], list[BankRow]]:
+-    with (datadir / "ledger.csv").open() as f:
++    """
++    Read a batch from disk.
++
++    Every file is opened as utf-8-sig rather than utf-8. Excel writes a byte
++    order mark when it saves a CSV as UTF-8, and the mark lands inside the
++    first header name -- so a real merchant export produced "a required column
++    is missing: order_id" while order_id was plainly visible in the file. The
++    sig codec consumes the mark when it is present and behaves exactly as
++    utf-8 when it is not.
++    """
++    with (datadir / "ledger.csv").open(encoding="utf-8-sig") as f:
+         orders = [Order(
+             order_id=r["order_id"],
+             order_amount_paise=int(r["order_amount_paise"]),
+@@ -126,7 +136,7 @@ def load(datadir: Path) -> tuple[list[Order], list[Txn], list[Settlement], list[
+             payment_method=r["payment_method"],
+         ) for r in csv.DictReader(f)]
+ 
+-    with (datadir / "gateway.csv").open() as f:
++    with (datadir / "gateway.csv").open(encoding="utf-8-sig") as f:
+         txns = [Txn(
+             txn_id=r["txn_id"],
+             txn_type=r["txn_type"],
+@@ -141,7 +151,7 @@ def load(datadir: Path) -> tuple[list[Order], list[Txn], list[Settlement], list[
+             status=r["status"],
+         ) for r in csv.DictReader(f)]
+ 
+-    with (datadir / "settlements.csv").open() as f:
++    with (datadir / "settlements.csv").open(encoding="utf-8-sig") as f:
+         settlements = [Settlement(
+             settlement_id=r["settlement_id"],
+             capture_date=date.fromisoformat(r["capture_date"]),
+@@ -150,7 +160,7 @@ def load(datadir: Path) -> tuple[list[Order], list[Txn], list[Settlement], list[
+             utr=r["utr"] or None,
+         ) for r in csv.DictReader(f)]
+ 
+-    with (datadir / "bank.csv").open() as f:
++    with (datadir / "bank.csv").open(encoding="utf-8-sig") as f:
+         bank = [BankRow(
+             bank_txn_id=r["bank_txn_id"],
+             value_date=date.fromisoformat(r["value_date"]),
+diff --git a/tests/README.md b/tests/README.md
+index b87653d..1312c32 100644
+--- a/tests/README.md
++++ b/tests/README.md
+@@ -8,7 +8,7 @@ python3 -m pytest tests/ -q
+ httpx2 is required by Starlette's TestClient, which the web-interface
+ tests use. The engine itself needs neither it nor any other dependency.
+ 
+-108 tests, no network access and no API key required. The agent's constraints are
++111 tests, no network access and no API key required. The agent's constraints are
+ enforced in code rather than requested in the prompt, so all of them are tested
+ by calling that code directly with the output a misbehaving model would produce.
+ 
+diff --git a/tests/test_app.py b/tests/test_app.py
+index 962fcb7..cec9744 100644
+--- a/tests/test_app.py
++++ b/tests/test_app.py
+@@ -9,6 +9,7 @@ language model.
+ 
+ from __future__ import annotations
+ 
++import shutil
+ import subprocess
+ import sys
+ from pathlib import Path
+@@ -44,6 +45,45 @@ def _files(batch, names=("ledger", "gateway", "bank", "settlements")):
+             for n in names}
+ 
+ 
++def _multipart(files: dict, question: str = ""):
++    """
++    Build a real multipart request without a running server.
++
++    The endpoints are reached through TestClient everywhere else. This exists
++    because the interesting failure happens after the provider check, which a
++    keyless test never gets past.
++    """
++    from starlette.requests import Request
++
++    boundary = "----recontest"
++    body = b""
++    for name, data in files.items():
++        body += (f"--{boundary}\r\n"
++                 f'Content-Disposition: form-data; name="{name}"; '
++                 f'filename="{name}.csv"\r\n'
++                 f"Content-Type: text/csv\r\n\r\n").encode()
++        body += data + b"\r\n"
++    if question:
++        body += (f"--{boundary}\r\n"
++                 f'Content-Disposition: form-data; name="question"\r\n\r\n'
++                 f"{question}\r\n").encode()
++    body += f"--{boundary}--\r\n".encode()
++
++    scope = {
++        "type": "http", "method": "POST", "path": "/ask",
++        "headers": [
++            (b"content-type",
++             f"multipart/form-data; boundary={boundary}".encode()),
++            (b"content-length", str(len(body)).encode()),
++        ],
++    }
++
++    async def receive():
++        return {"type": "http.request", "body": body, "more_body": False}
++
++    return Request(scope, receive)
++
++
+ class TestWebInterface:
+ 
+     def test_page_loads(self, client):
+@@ -67,6 +107,22 @@ class TestWebInterface:
+         assert r.status_code == 200
+         assert "90.8%" in r.text
+ 
++    def test_a_file_saved_by_excel_is_accepted(self, client, batch):
++        """
++        Excel writes a byte order mark when it saves a CSV as UTF-8, and the
++        mark lands inside the first header name. Read as plain utf-8 that
++        turns order_id into a column the loader cannot find, and the merchant
++        is told a column is missing while looking straight at it.
++
++        A file Excel wrote is the likeliest real upload this endpoint gets.
++        """
++        files = _files(batch)
++        name, data, mime = files["ledger"]
++        files["ledger"] = (name, b"\xef\xbb\xbf" + data, mime)
++        r = client.post("/reconcile", files=files)
++        assert r.status_code == 200, r.json().get("detail", "")
++        assert "90.8%" in r.text
++
+     def test_ground_truth_is_optional(self, client, batch):
+         """Without an answer key the report still renders, minus the metrics."""
+         r = client.post("/reconcile", files=_files(batch))
+@@ -193,17 +249,55 @@ class TestModelBackedEndpoints:
+         r = client.post("/investigate", files=_files(batch))
+         assert r.status_code == 503
+ 
+-    def test_the_three_required_files_are_enough_to_ask(self, client, batch,
+-                                                        no_provider):
++    @pytest.mark.parametrize("names", [
++        ("ledger", "gateway", "bank"),
++        ("ledger", "gateway", "bank", "settlements"),
++    ])
++    def test_an_upload_produces_a_batch_the_engine_can_load(self, batch, names):
+         """
+-        Settlements are optional on the reconcile form and must be optional
+-        here too. Without a header-only stub the loader fails on a file the
+-        caller was never asked for.
++        Settlements are optional on the form and must be optional here too.
++
++        This asserts on the loader rather than on a status code deliberately.
++        Reaching the endpoint without a model returns 503 before the loader
++        ever runs, so an endpoint test passes whether or not the optional
++        files are stubbed -- it cannot see this bug. The failure it guards
++        against was exactly that: three files uploaded, no settlements
++        written, and the engine unable to read its own working directory.
+         """
+-        r = client.post("/ask",
+-                        files=_files(batch, ("ledger", "gateway", "bank")),
++        import asyncio
++
++        from app import _read_request
++        from matcher import load
++
++        req = _multipart(
++            {n: (batch / f"{n}.csv").read_bytes() for n in names},
++            question="how much went to fees?")
++        question, updir, err = asyncio.run(_read_request(req))
++        assert err is None and updir is not None
++        assert question == "how much went to fees?"
++        try:
++            orders, _t, _s, _b = load(updir)
++            assert orders, "the uploaded ledger produced no orders"
++        finally:
++            shutil.rmtree(updir, ignore_errors=True)
++
++    def test_unreadable_files_are_rejected_before_any_model_call(self, client):
++        """
++        The same files /reconcile rejects with a named column must be rejected
++        the same way here. Without validation during preparation the loader
++        fails inside the handler, after the provider check, and the caller
++        gets an opaque 500 for a fixable typo.
++
++        A 400 rather than a 503 is the assertion: it proves the batch was
++        judged before a model was looked for.
++        """
++        d = ROOT / "datasets" / "07-malformed"
++        files = {n: (f"{n}.csv", (d / f"{n}.csv").read_bytes(), "text/csv")
++                 for n in ("ledger", "gateway", "bank")}
++        r = client.post("/ask", files=files,
+                         data={"question": "how much went to fees?"})
+-        assert r.status_code == 503
++        assert r.status_code == 400
++        assert "order_id" in r.json()["detail"]
+ 
+     def test_a_request_key_is_never_left_in_the_environment(self, no_provider):
+         """

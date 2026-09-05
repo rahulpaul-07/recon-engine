@@ -107,6 +107,22 @@ class TestWebInterface:
         assert r.status_code == 200
         assert "90.8%" in r.text
 
+    def test_a_file_saved_by_excel_is_accepted(self, client, batch):
+        """
+        Excel writes a byte order mark when it saves a CSV as UTF-8, and the
+        mark lands inside the first header name. Read as plain utf-8 that
+        turns order_id into a column the loader cannot find, and the merchant
+        is told a column is missing while looking straight at it.
+
+        A file Excel wrote is the likeliest real upload this endpoint gets.
+        """
+        files = _files(batch)
+        name, data, mime = files["ledger"]
+        files["ledger"] = (name, b"\xef\xbb\xbf" + data, mime)
+        r = client.post("/reconcile", files=files)
+        assert r.status_code == 200, r.json().get("detail", "")
+        assert "90.8%" in r.text
+
     def test_ground_truth_is_optional(self, client, batch):
         """Without an answer key the report still renders, minus the metrics."""
         r = client.post("/reconcile", files=_files(batch))

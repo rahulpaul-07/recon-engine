@@ -107,7 +107,9 @@ EQUIVALENT = {
 
 
 def load_truth(datadir: Path) -> dict[str, str]:
-    with (datadir / "ground_truth.csv").open() as f:
+    # utf-8-sig for the same reason as matcher.load: an answer key written by
+    # Excel carries a byte order mark that would corrupt the first column name.
+    with (datadir / "ground_truth.csv").open(encoding="utf-8-sig") as f:
         return {r["entity_id"]: r["expected_classification"]
                 for r in csv.DictReader(f)}
 

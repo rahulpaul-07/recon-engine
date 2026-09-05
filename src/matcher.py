@@ -115,7 +115,17 @@ def _int_or_none(v: str) -> int | None:
 
 
 def load(datadir: Path) -> tuple[list[Order], list[Txn], list[Settlement], list[BankRow]]:
-    with (datadir / "ledger.csv").open() as f:
+    """
+    Read a batch from disk.
+
+    Every file is opened as utf-8-sig rather than utf-8. Excel writes a byte
+    order mark when it saves a CSV as UTF-8, and the mark lands inside the
+    first header name -- so a real merchant export produced "a required column
+    is missing: order_id" while order_id was plainly visible in the file. The
+    sig codec consumes the mark when present and is identical to utf-8 when
+    it is not.
+    """
+    with (datadir / "ledger.csv").open(encoding="utf-8-sig") as f:
         orders = [Order(
             order_id=r["order_id"],
             order_amount_paise=int(r["order_amount_paise"]),
@@ -126,7 +136,7 @@ def load(datadir: Path) -> tuple[list[Order], list[Txn], list[Settlement], list[
             payment_method=r["payment_method"],
         ) for r in csv.DictReader(f)]
 
-    with (datadir / "gateway.csv").open() as f:
+    with (datadir / "gateway.csv").open(encoding="utf-8-sig") as f:
         txns = [Txn(
             txn_id=r["txn_id"],
             txn_type=r["txn_type"],
@@ -141,7 +151,7 @@ def load(datadir: Path) -> tuple[list[Order], list[Txn], list[Settlement], list[
             status=r["status"],
         ) for r in csv.DictReader(f)]
 
-    with (datadir / "settlements.csv").open() as f:
+    with (datadir / "settlements.csv").open(encoding="utf-8-sig") as f:
         settlements = [Settlement(
             settlement_id=r["settlement_id"],
             capture_date=date.fromisoformat(r["capture_date"]),
@@ -150,7 +160,7 @@ def load(datadir: Path) -> tuple[list[Order], list[Txn], list[Settlement], list[
             utr=r["utr"] or None,
         ) for r in csv.DictReader(f)]
 
-    with (datadir / "bank.csv").open() as f:
+    with (datadir / "bank.csv").open(encoding="utf-8-sig") as f:
         bank = [BankRow(
             bank_txn_id=r["bank_txn_id"],
             value_date=date.fromisoformat(r["value_date"]),
